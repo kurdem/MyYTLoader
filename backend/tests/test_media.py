@@ -49,7 +49,27 @@ def test_loudness_normalized(fixtures, tmp_path):
     out = tmp_path / "n.m4a"
     ff.convert_audio(fixtures["audio"], out, "m4a", "192k", normalize=True, trim_silence=False)
     analysis = ff.analyze_audio(out)
-    assert abs(float(analysis["loudnorm"]["input_i"]) - (-16)) < 2.5
+    assert abs(analysis["loudness"]["I"] - (-16)) < 1.0
+    assert analysis["loudness"]["peak"] <= -1.4
+
+
+def test_gain_filters_limit_peaks():
+    # leise Quelle mit hohen Spitzen -> Anhebung + Limiter
+    assert FFmpeg.gain_filters({"I": -26.0, "peak": -3.0}) == [
+        "volume=10.00dB", "alimiter=limit=0.8414:level=false"]
+    # genug Reserve -> kein Limiter
+    assert FFmpeg.gain_filters({"I": -20.0, "peak": -12.0}) == ["volume=4.00dB"]
+    # Anhebung begrenzt
+    assert FFmpeg.gain_filters({"I": -60.0, "peak": -50.0})[0] == "volume=20.00dB"
+    assert FFmpeg.gain_filters(None) == []
+
+
+def test_progress_reported_during_analysis(fixtures, tmp_path):
+    seen = []
+    ff.convert_audio(fixtures["audio"], tmp_path / "p.m4a", "m4a", "128k", normalize=True,
+                     trim_silence=False, on_progress=seen.append)
+    assert seen and min(seen) < 0.2 and max(seen) > 0.9
+    assert seen == sorted(seen)
 
 
 def test_copy_without_filters(fixtures, tmp_path):

@@ -14,7 +14,7 @@ im Browser abspielen oder als privaten Podcast-Feed abonnieren.
   - Audio: **M4A/AAC** (Standard, iOS-optimiert), **MP3**, **OPUS**, **FLAC** (nur bei echter verlustfreier Quelle, kein Hochkonvertieren)
   - Video: **MP4 (H.264/AAC)**, bei Bedarf iOS-kompatibel neu kodiert, `faststart`; **WebM**
   - einzelne Videos und **Playlists** (Auswahl einzelner Einträge, Ablage als Ordner)
-- **Audio-Aufbereitung:** Lautheitsnormalisierung auf -16 LUFS (zweistufig, `loudnorm`), optionales Entfernen
+- **Audio-Aufbereitung:** Lautheitsnormalisierung auf -16 LUFS (EBU-R128-Messung, Pegelanpassung + Limiter bei -1,5 dBFS), optionales Entfernen
   längerer Stille am Anfang/Ende, Cover (quadratisch) und ID3-/MP4-/Vorbis-Tags, saubere Dateinamen `Kanal - Titel.m4a`,
   Original optional behalten
 - **Auftragsverwaltung:** Warteschlange, Live-Fortschritt per Server-Sent Events, Abbrechen, Wiederholen, Verlauf.
