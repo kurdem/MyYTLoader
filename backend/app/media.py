@@ -15,8 +15,11 @@ from .security import UserError
 
 log = logging.getLogger("ytloader.media")
 
-# Podcast-übliche Lautheit (Apple empfiehlt -16 LUFS)
-LOUDNORM_TARGET = {"I": -16.0, "TP": -1.5, "LRA": 11.0}
+# Podcast-übliche Lautheit (Apple empfiehlt -16 LUFS), Spitzen max. -1,5 dBFS
+TARGET_LUFS = -16.0
+PEAK_LIMIT_DB = -1.5
+MAX_GAIN_DB = 20.0  # sehr leise Quellen nicht ins Rauschen hochziehen
+ANALYSIS_SHARE = 0.2  # Anteil der Analyse am Fortschritt der Aufbereitung
 SILENCE_THRESHOLD_DB = -50
 SILENCE_MIN_SECONDS = 2.0
 SILENCE_KEEP_SECONDS = 0.3
@@ -130,27 +133,42 @@ class FFmpeg:
         return stderr
 
     # ------------------------------------------------------------- Audio
-    def analyze_audio(self, src: Path, register=None) -> dict:
-        """Ein Analyse-Durchlauf: Lautheit (loudnorm) + Stille am Anfang/Ende."""
+    def analyze_audio(self, src: Path, duration: float | None = None, on_progress=None, register=None) -> dict:
+        """Ein schneller Analyse-Durchlauf: Lautheit (EBU R128) + Stille am Anfang/Ende.
+
+        ebur128 ist deutlich schneller als loudnorm (das intern auf 192 kHz hochrechnet).
+        """
         filt = (
-            f"silencedetect=noise={SILENCE_THRESHOLD_DB}dB:d={SILENCE_MIN_SECONDS},"
-            f"loudnorm=I={LOUDNORM_TARGET['I']}:TP={LOUDNORM_TARGET['TP']}:LRA={LOUDNORM_TARGET['LRA']}"
-            ":print_format=json"
+            "ebur128=peak=sample:framelog=quiet,"
+            f"silencedetect=noise={SILENCE_THRESHOLD_DB}dB:d={SILENCE_MIN_SECONDS}"
         )
         stderr = self._run(["-i", str(src), "-vn", "-sn", "-dn", "-af", filt, "-f", "null", "-"],
-                           register=register)
-        result: dict = {"loudnorm": None, "silences": []}
-        m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", stderr, re.S)
-        if m:
-            try:
-                result["loudnorm"] = json.loads(m.group(0))
-            except json.JSONDecodeError:
-                pass
+                           duration=duration, on_progress=on_progress, register=register)
+        result: dict = {"loudness": None, "silences": []}
+        summary = stderr[stderr.rfind("Summary:"):] if "Summary:" in stderr else ""
+        m_i = re.search(r"I:\s+(-?[\d.]+|-inf) LUFS", summary)
+        m_p = re.search(r"Peak:\s+(-?[\d.]+|-inf) dBFS", summary)
+        if m_i and m_i.group(1) != "-inf":
+            peak = float(m_p.group(1)) if m_p and m_p.group(1) != "-inf" else None
+            result["loudness"] = {"I": float(m_i.group(1)), "peak": peak}
         starts = [float(x) for x in re.findall(r"silence_start: (-?[\d.]+)", stderr)]
         ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", stderr)]
         for i, start in enumerate(starts):
             result["silences"].append((max(0.0, start), ends[i] if i < len(ends) else None))
         return result
+
+    @staticmethod
+    def gain_filters(loudness: dict | None) -> list[str]:
+        """Pegelanpassung auf TARGET_LUFS plus Limiter gegen Übersteuerung."""
+        if not loudness:
+            return []
+        gain = max(-MAX_GAIN_DB, min(MAX_GAIN_DB, TARGET_LUFS - loudness["I"]))
+        filters = [f"volume={gain:.2f}dB"]
+        peak = loudness.get("peak")
+        if peak is None or peak + gain > PEAK_LIMIT_DB:
+            limit = 10 ** (PEAK_LIMIT_DB / 20)
+            filters.append(f"alimiter=limit={limit:.4f}:level=false")
+        return filters
 
     @staticmethod
     def trim_window(silences: list[tuple[float, float | None]], duration: float | None) -> tuple[float, float | None]:
@@ -176,22 +194,21 @@ class FFmpeg:
             raise UserError("Die Quelle enthält keine Audiospur.")
         duration = self.duration(probe)
         filters: list[str] = []
+        encode_progress = on_progress
         if normalize or trim_silence:
-            analysis = self.analyze_audio(src, register=register)
+            analysis = self.analyze_audio(
+                src, duration=duration, register=register,
+                on_progress=(lambda f: on_progress(f * ANALYSIS_SHARE)) if on_progress else None,
+            )
+            if on_progress:
+                encode_progress = lambda f: on_progress(ANALYSIS_SHARE + (1 - ANALYSIS_SHARE) * f)  # noqa: E731
             if trim_silence:
                 start, end = self.trim_window(analysis["silences"], duration)
                 if start > 0 or end:
                     filters.append(f"atrim=start={start:.3f}" + (f":end={end:.3f}" if end else ""))
                     filters.append("asetpts=PTS-STARTPTS")
-            ln = analysis.get("loudnorm")
-            if normalize and ln and ln.get("input_i") not in (None, "-inf"):
-                filters.append(
-                    f"loudnorm=I={LOUDNORM_TARGET['I']}:TP={LOUDNORM_TARGET['TP']}:LRA={LOUDNORM_TARGET['LRA']}"
-                    f":measured_I={ln['input_i']}:measured_TP={ln['input_tp']}:measured_LRA={ln['input_lra']}"
-                    f":measured_thresh={ln['input_thresh']}:offset={ln['target_offset']}:linear=true"
-                )
-            elif normalize:
-                filters.append("loudnorm=I=-16:TP=-1.5:LRA=11")
+            if normalize:
+                filters += self.gain_filters(analysis.get("loudness"))
         args = ["-i", str(src), "-map", "0:a:0", "-vn", "-sn", "-dn", "-map_metadata", "-1"]
         same_codec = (src_audio.get("codec_name") == SOURCE_CODEC_MATCH[fmt])
         if not filters and same_codec and fmt != "flac":
@@ -214,7 +231,7 @@ class FFmpeg:
         elif fmt == "flac":
             args += ["-f", "flac"]
         args.append(str(dst))
-        self._run(args, duration=duration, on_progress=on_progress, register=register)
+        self._run(args, duration=duration, on_progress=encode_progress, register=register)
 
     # ------------------------------------------------------------- Video
     def convert_video(self, src: Path, dst: Path, fmt: str, meta: Metadata | None = None,
