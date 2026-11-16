@@ -1,6 +1,6 @@
 // Download-Verwaltung: aktiv / fertig / fehlgeschlagen, Live-Fortschritt
 import { api } from '../api.js';
-import { refreshJobs, store, upsertJob } from '../app.js';
+import { isAdmin, myId, refreshJobs, store, upsertJob } from '../app.js';
 import { applyBars, busy, fmtDateTime, fmtDuration, fmtEta, fmtSpeed, html, icons, toast } from '../util.js';
 
 const GROUPS = {
@@ -38,7 +38,8 @@ export class JobsView {
       this.renderList();
     }));
     this.el.querySelector('#clear').addEventListener('click', async (e) => {
-      if (!confirm('Fertige und fehlgeschlagene Aufträge aus dem Verlauf entfernen? Dateien in der Bibliothek bleiben erhalten.')) return;
+      const what = isAdmin() ? 'Fertige und fehlgeschlagene Aufträge aller Benutzer' : 'Fertige und fehlgeschlagene Aufträge';
+      if (!confirm(`${what} aus dem Verlauf entfernen? Dateien in der Bibliothek bleiben erhalten.`)) return;
       await busy(e.currentTarget, async () => {
         try {
           const r = await api('/api/jobs', { method: 'DELETE' });
@@ -88,6 +89,7 @@ export class JobsView {
         <div class="job__meta">
           <span class="status status--${j.status}" data-f="status">${LABELS[j.status] || j.status}</span>
           <span class="badge badge--soft">${FORMAT_LABEL[j.format] || j.format}</span>
+          ${isAdmin() && j.owner && j.user_id !== myId() ? html`<span class="owner">${icons.user}${j.owner}</span>` : ''}
           ${j.collection ? html`<span>${j.collection}</span>` : ''}
           ${j.duration ? html`<span>${fmtDuration(j.duration)}</span>` : ''}
           ${!active ? html`<span>${fmtDateTime(j.finished_at || j.created_at)}</span>` : ''}

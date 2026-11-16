@@ -68,6 +68,9 @@ class Settings:
     auth_enabled: bool
     admin_username: str
     admin_password: str
+    admin_password_reset: bool
+    default_user_quota_mb: int
+    default_user_max_jobs: int
     secret_key: str
     session_max_age_days: int
     base_url: str
@@ -136,6 +139,9 @@ def get_settings() -> Settings:
         auth_enabled=_bool("AUTH_ENABLED", True),
         admin_username=_str("ADMIN_USERNAME", "admin"),
         admin_password=os.environ.get("ADMIN_PASSWORD", ""),
+        admin_password_reset=_bool("ADMIN_PASSWORD_RESET", False),
+        default_user_quota_mb=_int("DEFAULT_USER_QUOTA_MB", 0, minimum=0),
+        default_user_max_jobs=_int("DEFAULT_USER_MAX_JOBS", 0, minimum=0),
         secret_key=os.environ.get("SECRET_KEY", ""),
         session_max_age_days=_int("SESSION_MAX_AGE_DAYS", 30, minimum=1),
         base_url=_str("BASE_URL", "").rstrip("/"),

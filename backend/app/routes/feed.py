@@ -6,7 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, Response
 
-from ..deps import require_user, services
+from ..deps import CurrentUser, require_user, services
 from ..feed import build_feed
 from ..security import UserError
 from .library import media_response
@@ -30,10 +30,16 @@ def _feed_url(base: str, token: str, collection: str | None = None, kind: str = 
     return url + ("?" + "&".join(params) if params else "")
 
 
-@private.get("")
-def feed_info(request: Request) -> dict:
+def _feed_owner(request: Request, token: str) -> dict:
+    user = services(request).users.by_feed_token(token)
+    if not user:
+        raise UserError("Unbekannter Feed.", status_code=404)
+    return user
+
+
+def feed_info(request: Request, user: dict) -> dict:
     svc = services(request)
-    token = svc.feed.get()
+    token = user["feed_token"]
     base = base_url(request)
     return {
         "base_url": base,
@@ -42,24 +48,31 @@ def feed_info(request: Request) -> dict:
         "feeds": [
             {"name": "Alle Audiodateien", "url": _feed_url(base, token)},
             {"name": "Alle Videos", "url": _feed_url(base, token, kind="video")},
-            *({"name": c["name"], "url": _feed_url(base, token, c["name"])} for c in svc.library.collections()),
+            *({"name": c["name"], "url": _feed_url(base, token, c["name"])}
+              for c in svc.library.collections(user["id"])),
         ],
     }
 
 
+@private.get("")
+def get_feed(user: CurrentUser, request: Request) -> dict:
+    return feed_info(request, user)
+
+
 @private.post("/rotate")
-def rotate(request: Request) -> dict:
-    services(request).feed.rotate()
-    return feed_info(request)
+def rotate(user: CurrentUser, request: Request) -> dict:
+    svc = services(request)
+    svc.users.rotate_feed_token(user["id"])
+    return feed_info(request, svc.users.require(user["id"]))
 
 
 @public.get("/{token}/podcast.xml")
 def podcast(token: str, request: Request, collection: str | None = None,
             kind: Literal["audio", "video", "all"] = "audio") -> Response:
     svc = services(request)
-    svc.feed.verify(token)
+    owner = _feed_owner(request, token)
     base = base_url(request)
-    items = svc.library.list(kind=None if kind == "all" else kind, collection=collection, limit=2000)
+    items = svc.library.list(owner["id"], kind=None if kind == "all" else kind, collection=collection, limit=2000)
     title = collection or ("MyYTLoader – Videos" if kind == "video" else "MyYTLoader")
     image = f"{base}/feed/{token}/artwork.png"
     if collection and items and items[0]["has_cover"]:
@@ -75,23 +88,22 @@ def podcast(token: str, request: Request, collection: str | None = None,
 
 @public.api_route("/{token}/media/{media_id}/{filename}", methods=["GET", "HEAD"])
 def feed_media(token: str, media_id: str, filename: str, request: Request) -> FileResponse:
-    svc = services(request)
-    svc.feed.verify(token)
-    return media_response(svc, media_id, attachment=False)
+    owner = _feed_owner(request, token)
+    # owner wird wie ein normaler Benutzer geprüft: nur eigene Medien über den eigenen Token
+    return media_response(services(request), media_id, False, {**owner, "role": "user"})
 
 
 @public.get("/{token}/cover/{media_id}.jpg")
 def feed_cover(token: str, media_id: str, request: Request) -> FileResponse:
-    svc = services(request)
-    svc.feed.verify(token)
-    return FileResponse(svc.library.cover_file(media_id), media_type="image/jpeg")
+    owner = _feed_owner(request, token)
+    path = services(request).library.cover_file(media_id, {**owner, "role": "user"})
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @public.get("/{token}/artwork.png")
 def artwork(token: str, request: Request) -> FileResponse:
-    svc = services(request)
-    svc.feed.verify(token)
-    path = svc.settings.frontend_path / "icons" / "podcast-1400.png"
+    _feed_owner(request, token)
+    path = services(request).settings.frontend_path / "icons" / "podcast-1400.png"
     if not path.is_file():
         raise UserError("Kein Artwork vorhanden.", 404)
     return FileResponse(path, media_type="image/png")

@@ -126,5 +126,7 @@ export const icons = {
   back: raw('<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>'),
   rss: raw('<svg viewBox="0 0 24 24"><path d="M5 19h.01M5 12a7 7 0 0 1 7 7M5 5a14 14 0 0 1 14 14"/></svg>'),
   inbox: raw('<svg viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l3-8h10l3 8v6H4z"/></svg>'),
+  plus: raw('<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'),
+  user: raw('<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'),
   vlc: raw('<svg viewBox="0 0 24 24"><path d="M12 3 5 20h14zM8 13h8"/></svg>'),
 };

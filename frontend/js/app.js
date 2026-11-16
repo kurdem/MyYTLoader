@@ -6,6 +6,10 @@ import { JobsView } from './views/jobs.js';
 import { LibraryView } from './views/library.js';
 import { MediaView } from './views/media.js';
 import { MoreView } from './views/more.js';
+import { UsersView } from './views/users.js';
+
+export const isAdmin = () => !!(store.me && store.me.user && store.me.user.role === 'admin');
+export const myId = () => (store.me && store.me.user ? store.me.user.id : null);
 
 export const store = {
   me: null,
@@ -20,6 +24,7 @@ const routes = [
   { pattern: /^\/library$/, nav: 'library', view: LibraryView },
   { pattern: /^\/media\/([a-f0-9]{32})$/, nav: 'library', view: MediaView },
   { pattern: /^\/more$/, nav: 'more', view: MoreView },
+  { pattern: /^\/users$/, nav: 'more', view: UsersView },
 ];
 
 let current = null;
@@ -54,8 +59,8 @@ function handleEvent(evt) {
     store.jobs.delete(evt.id);
     updateBadge();
   } else if (evt.type === 'jobs_cleared') {
-    for (const [id, j] of store.jobs) if (['done', 'failed', 'cancelled'].includes(j.status)) store.jobs.delete(id);
-    updateBadge();
+    refreshJobs().then(() => current && current.onEvent && current.onEvent({ type: 'resync' })).catch(() => {});
+    return;
   }
   if (current && current.onEvent) current.onEvent(evt);
 }

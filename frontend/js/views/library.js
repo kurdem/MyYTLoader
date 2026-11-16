@@ -1,11 +1,14 @@
 // Medienbibliothek: Suche, Filter, Sortierung, Kartenansicht
 import { api } from '../api.js';
+import { isAdmin, myId } from '../app.js';
 import { fmtBytes, fmtDate, fmtDuration, html, icons } from '../util.js';
 
 const PREF_KEY = 'ytl:library';
 
+const DEFAULTS = { kind: 'all', sort: 'created:desc', collection: '', owner: 'me' };
+
 function loadPrefs() {
-  try { return { kind: 'all', sort: 'created:desc', collection: '', ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { return { kind: 'all', sort: 'created:desc', collection: '' }; }
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { return { ...DEFAULTS }; }
 }
 
 export class LibraryView {
@@ -46,6 +49,7 @@ export class LibraryView {
             <button class="chip" data-kind="video">Video</button>
           </div>
           <select class="input" id="collection" aria-label="Ordner"><option value="">Alle Ordner</option></select>
+          <select class="input" id="owner" aria-label="Benutzer" hidden></select>
         </div>
       </div>
       <div id="items"></div>
@@ -61,11 +65,29 @@ export class LibraryView {
     this.el.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => {
       p.kind = b.dataset.kind; this.savePrefs(); this.load();
     }));
+    const ownerSel = this.el.querySelector('#owner');
+    ownerSel.addEventListener('change', (e) => {
+      p.owner = e.target.value; p.collection = ''; this.savePrefs();
+      this.loadCollections().then(() => this.load());
+    });
+    if (!isAdmin()) p.owner = 'me';
+    else await this.loadOwners();
     await Promise.all([this.loadCollections(), this.load()]);
   }
 
+  // Admins: eigene Bibliothek, alle oder die eines bestimmten Benutzers anzeigen
+  async loadOwners() {
+    const { users } = await api('/api/users');
+    const sel = this.el.querySelector('#owner');
+    sel.innerHTML = String(html`<option value="me">Meine Bibliothek</option><option value="all">Alle Benutzer</option>
+      ${users.filter((u) => u.id !== myId()).map((u) => html`<option value="${u.id}">${u.username}</option>`)}`);
+    sel.hidden = users.length < 2;
+    if (![...sel.options].some((o) => o.value === this.prefs.owner)) this.prefs.owner = 'me';
+    sel.value = this.prefs.owner;
+  }
+
   async loadCollections() {
-    const cols = await api('/api/media/collections');
+    const cols = await api(`/api/media/collections?owner=${encodeURIComponent(this.prefs.owner)}`);
     const sel = this.el.querySelector('#collection');
     sel.innerHTML = String(html`<option value="">Alle Ordner</option>${cols.map((c) => html`<option value="${c.name}">${c.name} (${c.count})</option>`)}`);
     sel.hidden = cols.length === 0;
@@ -77,7 +99,7 @@ export class LibraryView {
     const p = this.prefs;
     this.el.querySelectorAll('[data-kind]').forEach((b) => b.classList.toggle('is-active', b.dataset.kind === p.kind));
     const [sort, order] = p.sort.split(':');
-    const params = new URLSearchParams({ kind: p.kind, sort, order });
+    const params = new URLSearchParams({ kind: p.kind, sort, order, owner: p.owner });
     if (this.q) params.set('q', this.q);
     if (p.collection) params.set('collection', p.collection);
     const id = ++this.reqId;
@@ -99,7 +121,7 @@ export class LibraryView {
         </div>
         <div>
           <div class="tile__title clamp-2">${m.title}</div>
-          <div class="tile__sub ellipsis">${m.artist || '–'}</div>
+          <div class="tile__sub ellipsis">${p.owner !== 'me' && m.owner ? html`<span class="owner">${icons.user}${m.owner}</span> · ` : ''}${m.artist || '–'}</div>
           <div class="tile__sub">${fmtBytes(m.size)} · ${fmtDate(m.created_at)}</div>
         </div>
       </a>`)}</div>`);

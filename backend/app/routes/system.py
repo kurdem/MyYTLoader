@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, Request
 
 from .. import __version__
 from ..db import utcnow
-from ..deps import require_user, services
+from ..auth import is_admin
+from ..deps import AdminUser, CurrentUser, require_user, services
 from ..maintenance import cleanup_temp
 
 public = APIRouter(prefix="/api", tags=["system"])
@@ -34,15 +35,19 @@ def health(request: Request) -> dict:
 
 
 @router.get("")
-def info(request: Request) -> dict:
+def info(user: CurrentUser, request: Request) -> dict:
     svc = services(request)
     s = svc.settings
-    try:
-        usage = shutil.disk_usage(s.download_path)
-        disk = {"total": usage.total, "used": usage.used, "free": usage.free}
-    except OSError:
-        disk = {}
+    admin = is_admin(user)
+    disk: dict = {}
+    if admin:
+        try:
+            usage = shutil.disk_usage(s.download_path)
+            disk = {"total": usage.total, "used": usage.used, "free": usage.free}
+        except OSError:
+            pass
     return {
+        "is_admin": admin,
         "versions": {
             "app": __version__,
             "yt_dlp": svc.ytdlp.version(),
@@ -67,13 +72,13 @@ def info(request: Request) -> dict:
             "playlist_max_items": s.playlist_max_items,
             "retention_days": s.retention_days,
         },
-        "library": svc.library.stats(),
+        "library": svc.library.stats(None if admin else user["id"]),
         "disk": disk,
     }
 
 
 @router.post("/ytdlp/update")
-async def update_ytdlp(request: Request) -> dict:
+async def update_ytdlp(_: AdminUser, request: Request) -> dict:
     svc = services(request)
     result = await asyncio.to_thread(svc.ytdlp.update)
     svc.db.kv_set("ytdlp_last_update", utcnow())
@@ -81,6 +86,6 @@ async def update_ytdlp(request: Request) -> dict:
 
 
 @router.post("/cleanup-temp")
-def cleanup(request: Request) -> dict:
+def cleanup(_: AdminUser, request: Request) -> dict:
     svc = services(request)
     return {"deleted": cleanup_temp(svc, max_age_hours=0)}
