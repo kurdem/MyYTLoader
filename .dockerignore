@@ -1,0 +1,10 @@
+.git
+.github
+.env
+data
+**/__pycache__
+**/.pytest_cache
+backend/tests
+tools
+*.md
+!README.md
