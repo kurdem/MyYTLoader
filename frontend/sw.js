@@ -1,5 +1,5 @@
 // Service Worker: cached nur die App-Shell. API, Medien und Feeds gehen immer ans Netz.
-const CACHE = 'ytl-shell-v4';
+const CACHE = 'ytl-shell-v5';
 const SHELL = [
   './',
   'index.html',
@@ -15,6 +15,7 @@ const SHELL = [
   'js/views/users.js',
   'js/views/feeds.js',
   'js/views/feed.js',
+  'js/views/help.js',
   'manifest.webmanifest',
 ];
 

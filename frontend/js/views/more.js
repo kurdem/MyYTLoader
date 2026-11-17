@@ -52,6 +52,11 @@ export class MoreView {
           </details>` : ''}
         </section>
 
+        <a class="card row link-card" href="#/help">${icons.help}
+          <div class="grow"><b>Hilfe</b>
+            <p class="faint">Einfach erklärt: Downloads, iPhone, Podcast-Feeds, Abos und häufige Probleme.</p></div>
+          <span class="muted">›</span></a>
+
         <a class="card row link-card" href="#/feeds">${icons.rss}
           <div class="grow"><b>Podcast-Feeds &amp; Abos</b>
             <p class="faint">Feed-Links, eigene Feeds, Serien und automatische Abos findest du jetzt unter „Feeds“.</p></div>

@@ -9,6 +9,7 @@ import { MoreView } from './views/more.js';
 import { UsersView } from './views/users.js';
 import { FeedsView } from './views/feeds.js';
 import { FeedView } from './views/feed.js';
+import { HelpView } from './views/help.js';
 
 export const isAdmin = () => !!(store.me && store.me.user && store.me.user.role === 'admin');
 export const myId = () => (store.me && store.me.user ? store.me.user.id : null);
@@ -28,6 +29,7 @@ const routes = [
   { pattern: /^\/more$/, nav: 'more', view: MoreView },
   { pattern: /^\/users$/, nav: 'more', view: UsersView },
   { pattern: /^\/feeds$/, nav: 'feeds', view: FeedsView },
+  { pattern: /^\/help$/, nav: 'help', view: HelpView },
   { pattern: /^\/feeds\/([a-f0-9]{32})$/, nav: 'feeds', view: FeedView },
 ];
 

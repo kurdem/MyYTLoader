@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import { isAdmin, myId, refreshJobs } from '../app.js';
 import {
-  bindCopy, busy, fallbackImages, fmtDuration, fmtRelative, html, icons, raw, subscribeBlock, toast,
+  bindCopy, busy, fallbackImages, fmtDuration, fmtRelative, helpLink, html, icons, raw, subscribeBlock, toast,
 } from '../util.js';
 
 const INTERVALS = [[1, 'stündlich'], [3, 'alle 3 Std.'], [6, 'alle 6 Std.'], [12, 'alle 12 Std.'], [24, 'täglich'], [48, 'alle 2 Tage'], [168, 'wöchentlich']];
@@ -22,12 +22,13 @@ export class FeedsView {
     Object.assign(this, { feeds, subs, info, cols });
     this.el.innerHTML = String(html`
       <header class="page-head"><div><h1>Feeds</h1>
-        <p>Eigene Podcast-Feeds, automatische Abos und Feed-Links für deine Podcast-App.</p></div></header>
+        <p>Eigene Podcast-Feeds, automatische Abos und Feed-Links für deine Podcast-App.</p></div>
+        ${helpLink('feeds', 'Hilfe: Feeds in der Podcast-App abonnieren')}</header>
       ${!info.https ? html`<div class="notice notice--warn">Der Server ist per HTTP erreichbar. Viele Podcast-Apps (u. a. Apple Podcasts)
         verlangen HTTPS – bitte über den Nginx Proxy Manager mit Zertifikat veröffentlichen oder <code>BASE_URL</code> setzen.</div>` : ''}
       <div class="stack">
         <section class="stack">
-          <div class="row"><h2 class="grow">Eigene Feeds</h2></div>
+          <div class="row"><h2 class="grow">Eigene Feeds</h2>${helpLink('customfeeds', 'Hilfe: Eigene Feeds und Serien')}</div>
           ${feeds.length ? html`<div class="grid">${feeds.map((f) => html`
             <a class="tile" href="#/feeds/${f.id}">
               <div class="tile__art">
@@ -55,7 +56,7 @@ export class FeedsView {
         </section>
 
         <section class="stack">
-          <h2>Automatische Abos</h2>
+          <div class="row"><h2 class="grow">Automatische Abos</h2>${helpLink('subscriptions', 'Hilfe: Automatische Abos')}</div>
           <p class="muted small">Kanäle und Playlists werden regelmäßig geprüft. Neue Videos werden automatisch geladen
             und können direkt in einem eigenen Feed landen.</p>
           <div class="stack" id="subs">${subs.map((s) => this.subHtml(s))}</div>

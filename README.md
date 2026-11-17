@@ -32,6 +32,7 @@ im Browser abspielen oder als privaten Podcast-Feed abonnieren.
   (Teil 1, 2, 3 … – ideal für Hörbücher)
 - **Automatische Abos** für YouTube-Kanäle und Playlists: neue Videos werden regelmäßig geladen und landen optional
   direkt in einem eigenen Feed
+- **Eingebaute Hilfe** für Endbenutzer in einfacher Sprache (Suche, Themen, „?“-Links auf den Seiten)
 - **Eigener Name und eigenes Icon** (Admin-Einstellung, ohne Neustart): App-Titel, Home-Bildschirm, PWA-Icons und Podcast-Artwork
 - **Sicherheit:** Login, CSRF-Schutz, Domain-Allowlist, SSRF-Schutz (keine internen Adressen), Pfadvalidierung,
   Rate Limiting, Größenlimit, keine Shell-Aufrufe mit Benutzereingaben, strikte Content-Security-Policy

@@ -127,6 +127,7 @@ export const icons = {
   rss: raw('<svg viewBox="0 0 24 24"><path d="M5 19h.01M5 12a7 7 0 0 1 7 7M5 5a14 14 0 0 1 14 14"/></svg>'),
   inbox: raw('<svg viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l3-8h10l3 8v6H4z"/></svg>'),
   plus: raw('<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'),
+  help: raw('<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>'),
   up: raw('<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>'),
   down: raw('<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>'),
   close: raw('<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>'),
@@ -149,6 +150,11 @@ export function subscribeBlock(url, label) {
       <a class="btn btn--sm" href="pktc://subscribe/${url.replace(/^https?:\/\//, '')}">Pocket Casts</a>
     </div>
   </div>`;
+}
+
+/** Kleiner runder „?“-Link zur passenden Hilfe-Stelle. */
+export function helpLink(topic, label = 'Hilfe zu diesem Bereich') {
+  return html`<a class="help-link" href="#/help?topic=${topic}" title="${label}" aria-label="${label}">?</a>`;
 }
 
 export function bindCopy(root) {

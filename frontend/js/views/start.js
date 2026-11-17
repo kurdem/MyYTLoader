@@ -1,7 +1,7 @@
 // Startseite: URL analysieren, Format wählen, Download starten
 import { api } from '../api.js';
 import { store, upsertJob } from '../app.js';
-import { busy, fmtDuration, html, icons, raw, toast } from '../util.js';
+import { busy, fmtDuration, helpLink, html, icons, raw, toast } from '../util.js';
 
 const AUDIO = [
   { id: 'm4a', label: 'M4A', note: 'AAC · empfohlen für iPhone/iPad' },
@@ -38,6 +38,7 @@ export class StartView {
           <h1>Neuer Download</h1>
           <p>YouTube-Link einfügen, Format wählen, fertig.</p>
         </div>
+        ${helpLink('start', 'Hilfe: So funktioniert ein Download')}
       </header>
       <form class="card stack" id="analyze-form" novalidate>
         <div class="url-bar">
