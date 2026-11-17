@@ -85,6 +85,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-top: 1px solid var(--border);
 }
 .nav__brand { display: none; }
+.nav__footer { display: none; }
 .nav__item {
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -113,6 +114,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .nav__item:hover { background: var(--bg-elev); color: var(--text); }
   .nav__item.is-active { background: var(--accent-soft); }
   .nav__badge { position: static; margin-left: auto; }
+  .nav__footer { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+  .nav__footer[hidden] { display: none; }
+  .nav__user { display: flex; align-items: center; gap: 10px; padding: 6px 14px; color: var(--text-dim); font-weight: 650; min-width: 0; }
+  .nav__user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav__user svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .main { padding: 32px 32px 48px; width: 100%; }
 }
 
@@ -144,6 +150,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn--primary:hover { background: var(--accent-strong); }
 .btn--danger { color: var(--err); }
 .btn--danger:hover { background: var(--err-soft); }
+.btn--logout { color: var(--err); border-color: rgba(255, 107, 122, .35); }
+.btn--logout:hover { background: var(--err-soft); }
+.btn--logout svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .btn--ghost { background: transparent; border-color: transparent; }
 .btn--block { width: 100%; }
 .btn--lg { min-height: 56px; font-size: 1.05rem; border-radius: var(--radius); }

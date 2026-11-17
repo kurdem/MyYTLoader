@@ -95,9 +95,17 @@ function showLogin() {
   document.querySelector('#login-form input[name=username]').focus();
 }
 
+function renderAccount() {
+  const box = document.getElementById('nav-account');
+  const user = store.me && store.me.user;
+  box.hidden = !(user && store.me.auth_enabled);
+  if (user) document.getElementById('nav-username').textContent = user.username;
+}
+
 async function startApp() {
   document.getElementById('login').hidden = true;
   document.getElementById('app').hidden = false;
+  renderAccount();
   try {
     store.system = await api('/api/system');
   } catch {
@@ -127,6 +135,7 @@ function adoptSharedUrl() {
 async function boot() {
   adoptSharedUrl();
   setUnauthorizedHandler(showLogin);
+  document.getElementById('nav-logout').addEventListener('click', logout);
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.currentTarget;

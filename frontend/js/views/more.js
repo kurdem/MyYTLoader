@@ -27,8 +27,9 @@ export class MoreView {
           dann startet ${appName()} wie eine App.</section>` : ''}
 
         <section class="card stack">
-          <div class="row">${icons.user}<h2 class="grow">${acc.username}</h2>
-            <span class="badge ${admin ? 'badge--accent' : 'badge--soft'}">${admin ? 'Admin' : 'Benutzer'}</span></div>
+          <div class="row">${icons.user}<h2 class="grow ellipsis">${acc.username}</h2>
+            <span class="badge ${admin ? 'badge--accent' : 'badge--soft'}">${admin ? 'Admin' : 'Benutzer'}</span>
+            ${store.me.auth_enabled ? html`<button class="btn btn--sm btn--logout" type="button" id="logout">${icons.logout}<span>Abmelden</span></button>` : ''}</div>
           <div class="meter">
             <div class="row small"><span class="grow">Speicher</span>
               <b>${fmtBytes(acc.usage_bytes)}${acc.quota_bytes ? ` von ${fmtBytes(acc.quota_bytes)}` : ''}</b></div>
@@ -173,7 +174,6 @@ export class MoreView {
             Diese App umgeht keine DRM- oder Zugriffsschutzmaßnahmen und speichert keine Zugangsdaten.</p>
         </section>
 
-        ${store.me && store.me.auth_enabled ? html`<button class="btn btn--block" id="logout">Abmelden</button>` : ''}
       </div>
     `);
     applyBars(this.el);
