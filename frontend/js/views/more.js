@@ -1,7 +1,7 @@
 // Mehr: Podcast-Feed, eigene Dateien, Wartung, System, iOS-Tipps
 import { api, upload } from '../api.js';
 import { appName, applyBranding, isAdmin, logout, store, upsertJob } from '../app.js';
-import { applyBars, busy, copyText, fmtBytes, fmtDateTime, html, icons, isIOS, isStandalone, toast } from '../util.js';
+import { applyBars, busy, fmtBytes, fmtDateTime, html, icons, isIOS, isStandalone, toast } from '../util.js';
 
 export class MoreView {
   constructor(el) {
@@ -9,8 +9,8 @@ export class MoreView {
   }
 
   async render() {
-    const [sys, feed, me, brand] = await Promise.all([
-      api('/api/system'), api('/api/feed'), api('/api/auth/me'), api('/api/branding'),
+    const [sys, me, brand] = await Promise.all([
+      api('/api/system'), api('/api/auth/me'), api('/api/branding'),
     ]);
     this.brand = brand;
     store.system = sys;
@@ -52,29 +52,10 @@ export class MoreView {
           </details>` : ''}
         </section>
 
-        <section class="card stack">
-          <div class="row">${icons.rss}<h2 class="grow">Privater Podcast-Feed</h2></div>
-          <p class="muted small">Abonniere deine Bibliothek in einer Podcast-App (z. B. Apple Podcasts über „Sendung per URL folgen“,
-            Overcast, Pocket Casts). Der Feed ist nur über den geheimen Link erreichbar und nicht öffentlich gelistet.</p>
-          ${!feed.https ? html`<div class="notice notice--warn">Der Server ist per HTTP erreichbar. Viele Podcast-Apps (u. a. Apple Podcasts)
-            verlangen HTTPS – bitte über den Nginx Proxy Manager mit Zertifikat veröffentlichen oder <code>BASE_URL</code> setzen.</div>` : ''}
-          ${feed.feeds.map((f) => html`<div class="stack">
-            <b class="small">${f.name}</b>
-            <div class="copy-field">
-              <input class="input" readonly value="${f.url}" aria-label="Feed-URL ${f.name}">
-              <button class="btn icon-btn" data-copy="${f.url}" title="Kopieren">${icons.copy}</button>
-            </div>
-            <div class="row">
-              <a class="btn btn--sm" href="${f.url.replace(/^https?:\/\//, 'podcast://')}">Apple Podcasts</a>
-              <a class="btn btn--sm" href="overcast://x-callback-url/add?url=${encodeURIComponent(f.url)}">Overcast</a>
-              <a class="btn btn--sm" href="pktc://subscribe/${f.url.replace(/^https?:\/\//, '')}">Pocket Casts</a>
-            </div>
-          </div>`)}
-          <div class="row row--end">
-            <button class="btn btn--sm btn--danger" id="rotate">Feed-Link neu erzeugen</button>
-          </div>
-          <p class="hint">Neu erzeugen macht alle bisherigen Feed- und Direktlinks ungültig.</p>
-        </section>
+        <a class="card row link-card" href="#/feeds">${icons.rss}
+          <div class="grow"><b>Podcast-Feeds &amp; Abos</b>
+            <p class="faint">Feed-Links, eigene Feeds, Serien und automatische Abos findest du jetzt unter „Feeds“.</p></div>
+          <span class="muted">›</span></a>
 
         <section class="card stack">
           <h2>Eigene Datei hinzufügen</h2>
@@ -182,13 +163,6 @@ export class MoreView {
 
   bind() {
     const $ = (sel) => this.el.querySelector(sel);
-    this.el.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copyText(b.dataset.copy)));
-    $('#rotate').addEventListener('click', async (e) => {
-      if (!confirm('Neuen Feed-Link erzeugen? Bestehende Abos funktionieren danach nicht mehr.')) return;
-      await busy(e.currentTarget, async () => {
-        try { await api('/api/feed/rotate', { method: 'POST' }); toast('Neuer Feed-Link erzeugt.'); this.render(); } catch (err) { toast(err.message, 'err'); }
-      });
-    });
     $('#upload').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = e.currentTarget;

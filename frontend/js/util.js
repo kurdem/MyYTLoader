@@ -127,7 +127,48 @@ export const icons = {
   rss: raw('<svg viewBox="0 0 24 24"><path d="M5 19h.01M5 12a7 7 0 0 1 7 7M5 5a14 14 0 0 1 14 14"/></svg>'),
   inbox: raw('<svg viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l3-8h10l3 8v6H4z"/></svg>'),
   plus: raw('<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'),
+  up: raw('<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>'),
+  down: raw('<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>'),
+  close: raw('<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>'),
   user: raw('<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'),
   logout: raw('<svg viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>'),
   vlc: raw('<svg viewBox="0 0 24 24"><path d="M12 3 5 20h14zM8 13h8"/></svg>'),
 };
+
+/** Abo-Buttons für Podcast-Apps (Apple Podcasts, Overcast, Pocket Casts) plus Kopieren. */
+export function subscribeBlock(url, label) {
+  return html`<div class="stack">
+    ${label ? html`<b class="small">${label}</b>` : ''}
+    <div class="copy-field">
+      <input class="input" readonly value="${url}" aria-label="Feed-URL ${label || ''}">
+      <button class="btn icon-btn" type="button" data-copy="${url}" title="Kopieren">${icons.copy}</button>
+    </div>
+    <div class="row">
+      <a class="btn btn--sm" href="${url.replace(/^https?:\/\//, 'podcast://')}">Apple Podcasts</a>
+      <a class="btn btn--sm" href="overcast://x-callback-url/add?url=${encodeURIComponent(url)}">Overcast</a>
+      <a class="btn btn--sm" href="pktc://subscribe/${url.replace(/^https?:\/\//, '')}">Pocket Casts</a>
+    </div>
+  </div>`;
+}
+
+export function bindCopy(root) {
+  root.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copyText(b.dataset.copy)));
+}
+
+/** Bilder, die nicht laden (z. B. Feed ohne Cover), durch Platzhalter ersetzen – ohne Inline-Handler (CSP). */
+export function fallbackImages(root) {
+  root.querySelectorAll('img[data-fallback]').forEach((img) => {
+    const swap = () => { img.replaceWith(Object.assign(document.createElement('div'), { className: 'placeholder', innerHTML: icons.rss.value })); };
+    if (img.complete && img.naturalWidth === 0) swap(); else img.addEventListener('error', swap, { once: true });
+  });
+}
+
+export function fmtRelative(iso) {
+  if (!iso) return '–';
+  const diff = (new Date(iso).getTime() - Date.now()) / 1000;
+  const abs = Math.abs(diff);
+  const unit = abs < 3600 ? [Math.round(abs / 60), 'Min.'] : abs < 172800 ? [Math.round(abs / 3600), 'Std.'] : [Math.round(abs / 86400), 'Tagen'];
+  if (abs < 60) return diff < 0 ? 'gerade eben' : 'gleich';
+  return diff < 0 ? `vor ${unit[0]} ${unit[1]}` : `in ${unit[0]} ${unit[1]}`;
+}
+

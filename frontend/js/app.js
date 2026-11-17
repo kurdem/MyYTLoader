@@ -7,6 +7,8 @@ import { LibraryView } from './views/library.js';
 import { MediaView } from './views/media.js';
 import { MoreView } from './views/more.js';
 import { UsersView } from './views/users.js';
+import { FeedsView } from './views/feeds.js';
+import { FeedView } from './views/feed.js';
 
 export const isAdmin = () => !!(store.me && store.me.user && store.me.user.role === 'admin');
 export const myId = () => (store.me && store.me.user ? store.me.user.id : null);
@@ -25,6 +27,8 @@ const routes = [
   { pattern: /^\/media\/([a-f0-9]{32})$/, nav: 'library', view: MediaView },
   { pattern: /^\/more$/, nav: 'more', view: MoreView },
   { pattern: /^\/users$/, nav: 'more', view: UsersView },
+  { pattern: /^\/feeds$/, nav: 'feeds', view: FeedsView },
+  { pattern: /^\/feeds\/([a-f0-9]{32})$/, nav: 'feeds', view: FeedView },
 ];
 
 let current = null;

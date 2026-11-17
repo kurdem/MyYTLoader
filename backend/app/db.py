@@ -82,6 +82,54 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_jobs_user ON jobs(user_id, status);
     CREATE INDEX idx_media_user ON media(user_id, created_at);
     """,
+    # v3: eigene Feeds, Serien, automatische Abos
+    """
+    CREATE TABLE feeds (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL DEFAULT 'episodic',     -- episodic | serial
+        cover_path TEXT,                           -- relativ zu DOWNLOAD_PATH
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_feeds_user ON feeds(user_id);
+    CREATE TABLE feed_items (
+        feed_id TEXT NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+        media_id TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        added_at TEXT NOT NULL,
+        PRIMARY KEY (feed_id, media_id)
+    );
+    CREATE INDEX idx_feed_items_media ON feed_items(media_id);
+    CREATE TABLE subscriptions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        kind TEXT NOT NULL,                        -- channel | playlist
+        title TEXT NOT NULL,
+        format TEXT NOT NULL,
+        options TEXT NOT NULL DEFAULT '{}',
+        collection TEXT,
+        feed_id TEXT REFERENCES feeds(id) ON DELETE SET NULL,
+        interval_hours INTEGER NOT NULL DEFAULT 6,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        last_checked_at TEXT,
+        last_error TEXT,
+        last_new_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
+    CREATE TABLE subscription_seen (
+        subscription_id TEXT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+        video_id TEXT NOT NULL,
+        seen_at TEXT NOT NULL,
+        PRIMARY KEY (subscription_id, video_id)
+    );
+    ALTER TABLE jobs ADD COLUMN subscription_id TEXT;
+    ALTER TABLE media ADD COLUMN track INTEGER;
+    """,
 ]
 
 

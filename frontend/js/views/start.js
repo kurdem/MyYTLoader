@@ -215,7 +215,8 @@ export class StartView {
     const body = { url: info.url, format: fmt, options };
     if (info.type === 'playlist') {
       const picked = [...this.el.querySelectorAll('#entries input[type=checkbox]')]
-        .filter((c) => c.checked).map((c) => info.entries[Number(c.dataset.idx)]);
+        .filter((c) => c.checked)
+        .map((c) => ({ ...info.entries[Number(c.dataset.idx)], index: Number(c.dataset.idx) + 1 }));
       if (!picked.length) { toast('Bitte mindestens ein Video auswählen.', 'err'); return; }
       body.entries = picked;
       body.collection = this.el.querySelector('#collection').value.trim() || info.title;

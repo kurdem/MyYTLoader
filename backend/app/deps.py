@@ -8,12 +8,14 @@ from fastapi import Depends, Request
 
 from .auth import Auth, is_admin
 from .branding import Branding
+from .customfeeds import CustomFeeds
 from .config import Settings
 from .db import Database
 from .jobs import EventBus, JobManager
 from .library import Library
 from .media import FFmpeg
 from .security import RateLimiter, UserError
+from .subscriptions import Subscriptions
 from .users import Users
 from .ytdlp import YtDlp
 
@@ -32,6 +34,8 @@ class Services:
     api_limiter: RateLimiter
     login_limiter: RateLimiter
     branding: Branding
+    feeds: CustomFeeds
+    subscriptions: Subscriptions
 
 
 def services(request: Request) -> Services:

@@ -72,6 +72,8 @@ def delete_user(user_id: str, admin: AdminUser, request: Request) -> dict:
     svc.jobs.cancel_all_of(user_id)
     if svc.db.one("SELECT 1 FROM jobs WHERE user_id=? AND status IN ('running','processing')", (user_id,)):
         raise UserError("Laufende Aufträge werden gerade beendet. Bitte in ein paar Sekunden erneut versuchen.", 409)
+    svc.subscriptions.delete_all_of(user_id)
+    svc.feeds.delete_all_of(user_id)
     deleted = svc.library.delete_all_of(user_id)
     svc.db.execute("DELETE FROM jobs WHERE user_id=?", (user_id,))
     svc.users.delete(user_id)

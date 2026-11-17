@@ -32,6 +32,14 @@ QUOTA_EXCEEDED = "Dein Speicherkontingent ist erschöpft. Bitte alte Dateien lö
 DOWNLOAD_SHARE = 0.85  # Anteil des Downloads am Gesamtfortschritt
 
 
+def _track(value) -> int | None:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if 0 < n < 100000 else None
+
+
 class EventBus:
     """Verteilt Ereignisse an alle SSE-Clients (thread-sicher)."""
 
@@ -87,6 +95,8 @@ class JobManager:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._tasks: list[asyncio.Task] = []
         self._last_publish: dict[str, float] = {}
+        # Hooks nach erfolgreichem Auftrag: fn(job, media) – z. B. Abo -> eigenen Feed ergänzen
+        self.after_done: list = []
 
     # ------------------------------------------------------------ Lebenszyklus
     async def start(self) -> None:
@@ -152,7 +162,7 @@ class JobManager:
     # ---------------------------------------------------------------- API
     def create(self, *, user: dict, url: str, fmt: str, options: dict, kind: str = "url", title: str | None = None,
                channel: str | None = None, thumbnail: str | None = None, duration: float | None = None,
-               collection: str | None = None) -> dict:
+               collection: str | None = None, subscription_id: str | None = None) -> dict:
         if self.users.remaining_bytes(user) == 0:
             raise UserError(QUOTA_EXCEEDED, status_code=413)
         job = {
@@ -167,6 +177,7 @@ class JobManager:
             "format": fmt,
             "options": json.dumps(options),
             "collection": collection,
+            "subscription_id": subscription_id,
             "status": "queued",
             "stage": "Wartet",
             "progress": 0,
@@ -342,6 +353,11 @@ class JobManager:
             self._set(job_id, force=True, status="done", stage=None, progress=1, media_id=media["id"],
                       finished_at=utcnow(), title=media["title"], channel=media["artist"])
             self.bus.publish({"type": "media", "media": media, "user_id": job.get("user_id")})
+            for hook in self.after_done:
+                try:
+                    hook(job, media)
+                except Exception:  # ein Hook-Fehler darf den fertigen Auftrag nicht kippen
+                    log.exception("after_done-Hook fehlgeschlagen")
         except UserError as exc:
             cancelled = job_id in self._cancelled
             self._set(job_id, force=True, status="cancelled" if cancelled else "failed", stage=None,
@@ -384,7 +400,8 @@ class JobManager:
         collection = job.get("collection") or None
         meta = Metadata(title=str(title)[:300], artist=(str(artist)[:200] if artist else None),
                         album=collection or (str(artist)[:200] if artist else None),
-                        description=description, date=date, url=info.get("webpage_url") or None)
+                        description=description, date=date, url=info.get("webpage_url") or None,
+                        track=_track(opts.get("track")))
 
         def on_progress(frac: float) -> None:
             self._set(job_id, progress=round(share + (1 - share) * frac * 0.95, 4))
@@ -465,6 +482,7 @@ class JobManager:
             "size": dest.stat().st_size,
             "collection": collection,
             "published_at": date,
+            "track": meta.track,
             "created_at": utcnow(),
         }
         self.db.insert("media", record)

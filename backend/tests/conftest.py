@@ -54,11 +54,13 @@ if "fail-bot" in url:
 if "fail-drm" in url:
     print("ERROR: [youtube] abc: This video is DRM protected", file=sys.stderr); sys.exit(1)
 if "--dump-single-json" in args:
-    if "playlist" in url:
-        print(json.dumps({{"_type": "playlist", "id": "PL1", "title": "Meine Liste", "channel": "Kanal X",
+    if "playlist" in url or "/@" in url:
+        ids = [i for i in os.environ.get("FAKE_ENTRIES", "aaaaaaaaaaa,bbbbbbbbbbb").split(",") if i]
+        title = "Kanal X - Videos" if "/@" in url else "Meine Liste"
+        print(json.dumps({{"_type": "playlist", "id": "PL1", "title": title, "channel": "Kanal X",
             "webpage_url": url, "entries": [
-                {{"id": "aaaaaaaaaaa", "title": "Folge 1", "duration": 10, "ie_key": "Youtube"}},
-                {{"id": "bbbbbbbbbbb", "title": "Folge 2", "duration": 10, "ie_key": "Youtube"}}]}}))
+                {{"id": vid, "title": "Folge " + str(n), "duration": 10, "ie_key": "Youtube"}}
+                for n, vid in enumerate(ids, start=1)]}}))
     else:
         print(json.dumps({{"id": "dQw4w9WgXcQ", "title": "Test: Titel / mit Sonderzeichen?", "channel": "Testkanal",
             "description": "Beschreibung", "duration": 10, "webpage_url": url, "upload_date": "20240131",
