@@ -50,6 +50,7 @@ class Metadata:
     description: str | None = None
     date: str | None = None  # YYYY oder YYYY-MM-DD
     url: str | None = None
+    track: int | None = None  # Teil-Nr. (z. B. Position in einer Playlist)
 
 
 class FFmpeg:
@@ -292,7 +293,7 @@ def write_tags(path: Path, fmt: str, meta: Metadata, cover: Path | None) -> None
     year = (meta.date or "")[:10] or None
     try:
         if fmt == "mp3":
-            from mutagen.id3 import APIC, COMM, ID3, TALB, TDRC, TIT2, TPE1, WOAS, ID3NoHeaderError
+            from mutagen.id3 import APIC, COMM, ID3, TALB, TDRC, TIT2, TPE1, TRCK, WOAS, ID3NoHeaderError
 
             try:
                 tags = ID3(str(path))
@@ -310,6 +311,8 @@ def write_tags(path: Path, fmt: str, meta: Metadata, cover: Path | None) -> None
                 tags.add(TDRC(encoding=3, text=year))
             if meta.url:
                 tags.add(WOAS(url=meta.url))
+            if meta.track:
+                tags.add(TRCK(encoding=3, text=str(meta.track)))
             if cover_data:
                 tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover_data))
             tags.save(str(path), v2_version=3)
@@ -332,6 +335,8 @@ def write_tags(path: Path, fmt: str, meta: Metadata, cover: Path | None) -> None
                 t["\xa9cmt"] = [desc[:255]]
             if year:
                 t["\xa9day"] = [year]
+            if meta.track:
+                t["trkn"] = [(meta.track, 0)]
             if cover_data:
                 t["covr"] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
             f.save()
@@ -342,7 +347,8 @@ def write_tags(path: Path, fmt: str, meta: Metadata, cover: Path | None) -> None
             f = OggOpus(str(path)) if fmt == "opus" else FLAC(str(path))
             f["title"] = meta.title
             for key, value in (("artist", meta.artist), ("album", meta.album),
-                               ("description", desc), ("comment", desc), ("date", year)):
+                               ("description", desc), ("comment", desc), ("date", year),
+                               ("tracknumber", str(meta.track) if meta.track else None)):
                 if value:
                     f[key] = value
             if cover_data:

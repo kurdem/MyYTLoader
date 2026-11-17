@@ -20,16 +20,20 @@ from .db import Database
 from .deps import Services
 from .jobs import EventBus, JobManager
 from .library import Library
-from .maintenance import maintenance_loop
+from .customfeeds import CustomFeeds
+from .maintenance import maintenance_loop, subscriptions_loop
 from .media import FFmpeg
 from .routes import auth as auth_routes
 from .routes import branding as branding_routes
+from .routes import customfeeds as customfeed_routes
 from .routes import feed as feed_routes
 from .routes import jobs as job_routes
 from .routes import library as library_routes
+from .routes import subscriptions as subscription_routes
 from .routes import system as system_routes
 from .routes import users as user_routes
 from .security import RateLimiter, UserError
+from .subscriptions import Subscriptions
 from .users import Users
 from .ytdlp import YtDlp
 
@@ -54,9 +58,11 @@ def build_services(settings: Settings) -> Services:
     auth = Auth(settings, users)  # legt beim ersten Start den Admin an / übernimmt Bestandsdaten
     library = Library(settings, db, users, bus)
     jobs = JobManager(settings, db, ytdlp, ffmpeg, library, users, bus)
+    feeds = CustomFeeds(settings, db, library, ffmpeg)
+    subscriptions = Subscriptions(settings, db, ytdlp, jobs, users, feeds)
     return Services(
         settings=settings, db=db, users=users, auth=auth, bus=bus, ytdlp=ytdlp, ffmpeg=ffmpeg,
-        library=library, jobs=jobs,
+        library=library, jobs=jobs, feeds=feeds, subscriptions=subscriptions,
         api_limiter=RateLimiter(settings.rate_limit_per_minute, 60),
         login_limiter=RateLimiter(10, 300),
         branding=Branding(settings, db, ffmpeg),
@@ -77,6 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         svc.bus.bind(asyncio.get_running_loop())
         await svc.jobs.start()
         maint = asyncio.create_task(maintenance_loop(svc), name="maintenance")
+        subs = asyncio.create_task(subscriptions_loop(svc), name="subscriptions")
         if not settings.auth_enabled:
             log.warning("AUTH_ENABLED=false – die Oberfläche ist ohne Anmeldung erreichbar!")
         log.info("MyYTLoader %s gestartet als '%s' (yt-dlp %s)", __version__, svc.branding.name, svc.ytdlp.version())
@@ -84,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             maint.cancel()
+            subs.cancel()
             await svc.jobs.stop()
             svc.db.close()
 
@@ -129,6 +137,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(user_routes.router)
     app.include_router(job_routes.router)
     app.include_router(library_routes.router)
+    app.include_router(customfeed_routes.router)
+    app.include_router(subscription_routes.router)
     app.include_router(feed_routes.private)
     app.include_router(feed_routes.public)
 

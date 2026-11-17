@@ -28,6 +28,10 @@ im Browser abspielen oder als privaten Podcast-Feed abonnieren.
 - **Eigene Dateien hochladen**, z. B. eigene Aufnahmen für den privaten Podcast
 - **Mehrere Benutzer:** getrennte Bibliotheken, Aufträge und Podcast-Feeds pro Benutzer, Rollen Admin/Benutzer,
   Speicherkontingent und maximale parallele Aufträge pro Benutzer, Benutzerverwaltung in der Oberfläche
+- **Eigene Podcast-Feeds** mit Titel, Beschreibung, Cover und frei sortierbaren Episoden, wahlweise als **Serie**
+  (Teil 1, 2, 3 … – ideal für Hörbücher)
+- **Automatische Abos** für YouTube-Kanäle und Playlists: neue Videos werden regelmäßig geladen und landen optional
+  direkt in einem eigenen Feed
 - **Eigener Name und eigenes Icon** (Admin-Einstellung, ohne Neustart): App-Titel, Home-Bildschirm, PWA-Icons und Podcast-Artwork
 - **Sicherheit:** Login, CSRF-Schutz, Domain-Allowlist, SSRF-Schutz (keine internen Adressen), Pfadvalidierung,
   Rate Limiting, Größenlimit, keine Shell-Aufrufe mit Benutzereingaben, strikte Content-Security-Policy
@@ -189,7 +193,7 @@ Die Änderung gilt sofort, ein Neustart ist nicht nötig. Gespeichert wird in `d
 
 ## Privater Podcast-Feed
 
-Jeder Benutzer hat einen eigenen Feed mit eigenem Token. Unter **Mehr → Privater Podcast-Feed** stehen die Adressen:
+Jeder Benutzer hat einen eigenen Feed-Token. Unter **Feeds → Standard-Feeds** stehen die automatisch erzeugten Adressen:
 
 - **Alle Audiodateien** der Bibliothek
 - **Alle Videos**
@@ -198,6 +202,46 @@ Jeder Benutzer hat einen eigenen Feed mit eigenem Token. Unter **Mehr → Privat
 Abonnieren:
 - **Apple Podcasts:** Mediathek → „…“ → **Sendung per URL folgen** → Feed-URL einfügen (HTTPS erforderlich)
 - **Overcast / Pocket Casts:** Buttons auf der Seite oder URL manuell hinzufügen
+
+### Eigene Feeds
+
+Unter **Feeds → Neuer Feed** stellst du eigene Feeds zusammen, z. B. „Einschlafen“:
+
+- Titel, Beschreibung und **Cover** (PNG/JPG/WebP, wird auf 1400×1400 px gebracht; ohne Cover wird das Bild der ersten Episode verwendet)
+- Dateien hinzufügen über die Feed-Seite (Suche in der Bibliothek) oder direkt auf der Detailseite einer Datei
+  („In eigenen Feeds“ antippen)
+- Reihenfolge mit ↑/↓ oder per Sortierung nach Teil-Nr., Titel, Veröffentlichung oder Download-Datum
+- **Aus Ordner erstellen** übernimmt einen ganzen Ordner (z. B. eine Hörbuch-Playlist) sortiert nach Teil-Nr.
+- Löschen eines Feeds entfernt keine Dateien; gelöschte Dateien verschwinden automatisch aus allen Feeds.
+
+**Episoden oder Serie:**
+
+| | Episoden | Serie |
+|---|---|---|
+| Gedacht für | Sammlungen, Kanäle | Hörbücher, Kurse |
+| Reihenfolge in der App | zuletzt hinzugefügt zuerst | genau wie in MyYTLoader sortiert (Teil 1, 2, 3 …) |
+| Im Feed | `itunes:type episodic` | `itunes:type serial`, `itunes:episode` 1…n, aufsteigende Datumsangaben |
+
+Die aufsteigenden Datumsangaben sorgen dafür, dass auch Apps, die nur nach Datum sortieren (z. B. Overcast mit
+„Älteste zuerst“), die richtige Reihenfolge zeigen. Playlist-Downloads merken sich ihre Position als **Teil-Nr.**
+und schreiben sie auch als Track-Nummer in die Datei.
+
+### Automatische Abos
+
+Unter **Feeds → Neues Abo** einen Kanal-Link (`youtube.com/@name`) oder Playlist-Link eintragen:
+
+- **Prüfen:** stündlich bis wöchentlich (Standard alle 6 Stunden). „Jetzt prüfen“ startet sofort eine Prüfung.
+- **Beim Anlegen:** nur künftige Videos, die neuesten N oder alles Vorhandene (z. B. ein komplettes Hörbuch).
+- Neue Videos werden mit dem gewählten Format in einen **Ordner** geladen und optional in einen **eigenen Feed**
+  gelegt (neuer Feed: Playlist → Serie, Kanal → Episoden; oder ein bestehender Feed). In Serien werden neue Teile
+  anhand ihrer Teil-Nr. einsortiert.
+- Abos lassen sich pausieren, das Intervall ändern oder löschen (bereits geladene Dateien bleiben).
+- Speicherkontingent und Job-Limits gelten auch für Abos. Ist das Kontingent voll, steht der Fehler am Abo und
+  die Videos werden bei der nächsten Prüfung erneut versucht.
+- Je Prüfung werden höchstens `PLAYLIST_MAX_ITEMS` Einträge betrachtet (Kanäle: die neuesten). Abo-Downloads
+  pausieren zwischen den Videos `YTDLP_SLEEP_INTERVAL` Sekunden, um YouTube nicht zu überlasten.
+
+### Sicherheit der Feeds
 
 Der Feed ist durch einen geheimen Token in der URL geschützt, weil Podcast-Apps keine Anmeldung per Cookie können.
 Behandle die URL wie ein Passwort. Mit **Feed-Link neu erzeugen** werden alle alten Feed- und Direktlinks ungültig.
@@ -279,10 +323,12 @@ backend/app/
   media.py              FFmpeg: Konvertierung, Loudnorm, Stille, Cover; Tagging mit mutagen
   jobs.py               Warteschlange mit fairem Scheduler (Limit pro Benutzer), Event-Bus für SSE (pro Benutzer gefiltert)
   library.py            Bibliothek: Abfragen, Bearbeiten, Löschen
-  feed.py               RSS-Feed mit iTunes-Namespace
+  feed.py               RSS-Feed mit iTunes-Namespace (Episoden/Serie)
+  customfeeds.py        eigene Feeds: Episoden, Reihenfolge, Cover
+  subscriptions.py      automatische Abos für Kanäle/Playlists
   branding.py           App-Name und Icon, Icon-Erzeugung per FFmpeg, dynamisches index.html/Manifest
-  maintenance.py        Temp-Bereinigung, Aufbewahrungsfrist, yt-dlp-Auto-Update
-  routes/               HTTP-Endpunkte (auth, users, jobs, library, feed, branding, system)
+  maintenance.py        Temp-Bereinigung, Aufbewahrungsfrist, yt-dlp-Auto-Update, Abo-Prüfung
+  routes/               HTTP-Endpunkte (auth, users, jobs, library, feed, customfeeds, subscriptions, branding, system)
 docker/entrypoint.sh    Volumes an PUID/PGID anpassen, Rechte abgeben, uvicorn starten
 ```
 
@@ -309,7 +355,7 @@ python -m pytest -q
 
 Die Tests nutzen echtes FFmpeg (Konvertierung, Loudness, Stille, Tags für alle Formate) und ein Fake-yt-dlp mit
 demselben CLI-Vertrag für die API-End-to-End-Tests (Auth, CSRF, SSRF, Playlist, Abbruch, Größenlimit, Feed, Upload,
-Mehrbenutzer: Trennung, Rollen, Kontingente, Job-Limits, Migration aus v1).
+Mehrbenutzer: Trennung, Rollen, Kontingente, Job-Limits, Migration aus v1; eigene Feeds, Serien, Abos).
 
 Lokal starten:
 

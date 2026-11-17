@@ -25,8 +25,12 @@ def _duration(seconds: float | None) -> str:
 
 
 def build_feed(items: list[dict], base: str, token: str, title: str, description: str,
-               self_url: str, image_url: str, author: str | None = None) -> str:
-    """Erzeugt RSS 2.0 mit iTunes-Namespace. itunes:block verhindert eine Aufnahme ins Apple-Verzeichnis."""
+               self_url: str, image_url: str, author: str | None = None, serial: bool = False) -> str:
+    """Erzeugt RSS 2.0 mit iTunes-Namespace. itunes:block verhindert eine Aufnahme ins Apple-Verzeichnis.
+
+    serial=True: Serie (Hörbuch) – Episodennummern 1..n in der Reihenfolge von items; Items dürfen
+    über "pub_date" ein eigenes Datum mitbringen, damit auch nach Datum sortierende Apps die Reihenfolge treffen.
+    """
     e = escape
     out = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -45,11 +49,11 @@ def build_feed(items: list[dict], base: str, token: str, title: str, description
         f'<itunes:image href="{e(image_url)}"/>',
         f"<image><url>{e(image_url)}</url><title>{e(title)}</title><link>{e(base)}/</link></image>",
         "<itunes:explicit>false</itunes:explicit>",
-        "<itunes:type>episodic</itunes:type>",
+        f"<itunes:type>{'serial' if serial else 'episodic'}</itunes:type>",
         "<itunes:block>Yes</itunes:block>",
         '<itunes:category text="Personal Journals"/>',
     ]
-    for m in items:
+    for number, m in enumerate(items, start=1):
         filename = quote(m["filename"])
         enclosure = f"{base}/feed/{token}/media/{m['id']}/{filename}"
         desc = m.get("description") or ""
@@ -57,7 +61,7 @@ def build_feed(items: list[dict], base: str, token: str, title: str, description
             "<item>",
             f"<title>{e(m['title'])}</title>",
             f'<guid isPermaLink="false">ytloader-{m["id"]}</guid>',
-            f"<pubDate>{_rfc822(m.get('created_at'))}</pubDate>",
+            f"<pubDate>{_rfc822(m.get('pub_date') or m.get('created_at'))}</pubDate>",
             f'<enclosure url="{e(enclosure)}" length="{int(m.get("size") or 0)}" '
             f'type="{MIME_TYPES.get(m["format"], "application/octet-stream")}"/>',
             f"<itunes:duration>{_duration(m.get('duration'))}</itunes:duration>",
@@ -66,6 +70,8 @@ def build_feed(items: list[dict], base: str, token: str, title: str, description
             f"<itunes:summary>{e(desc[:4000])}</itunes:summary>",
             "<itunes:explicit>false</itunes:explicit>",
         ]
+        if serial:
+            out += [f"<itunes:episode>{number}</itunes:episode>", "<itunes:episodeType>full</itunes:episodeType>"]
         if m.get("source_url"):
             out.append(f"<link>{e(m['source_url'])}</link>")
         if m.get("has_cover"):

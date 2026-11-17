@@ -66,6 +66,26 @@ def update_ytdlp(svc) -> None:
         log.warning("Automatisches yt-dlp-Update fehlgeschlagen: %s", exc)
 
 
+SUBSCRIPTION_TICK = 60
+
+
+async def subscriptions_loop(svc) -> None:
+    """Prüft fällige Abos nacheinander (eine Prüfung gleichzeitig, schont YouTube)."""
+    await asyncio.sleep(20)  # Start nicht verzögern
+    while True:
+        try:
+            for sub_id in await asyncio.to_thread(svc.subscriptions.due):
+                try:
+                    await asyncio.to_thread(svc.subscriptions.check, sub_id)
+                except Exception as exc:  # z. B. "läuft bereits" durch manuelle Prüfung
+                    log.info("Abo-Prüfung %s übersprungen: %s", sub_id, exc)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Abo-Prüfung fehlgeschlagen")
+        await asyncio.sleep(SUBSCRIPTION_TICK)
+
+
 async def maintenance_loop(svc) -> None:
     last_update = 0.0
     while True:

@@ -34,6 +34,7 @@ class JobOptions(BaseModel):
 
 class Entry(BaseModel):
     id: str = Field(max_length=32)
+    index: int | None = Field(default=None, ge=1, le=100000)  # Position in der Playlist -> Teil-Nr.
     title: str | None = Field(default=None, max_length=500)
     duration: float | None = None
     thumbnail: str | None = Field(default=None, max_length=2048)
@@ -99,9 +100,9 @@ def create_jobs(body: JobBody, user: CurrentUser, request: Request) -> dict:
         if len(body.entries) > svc.settings.playlist_max_items:
             raise UserError(f"Maximal {svc.settings.playlist_max_items} Einträge pro Playlist.")
         validate_url(body.url, svc.settings.allowed_domains, svc.settings.check_dns)
-        for e in body.entries:
+        for pos, e in enumerate(body.entries, start=1):
             created.append(svc.jobs.create(
-                user=user, url=youtube_video_url(e.id), fmt=fmt, options=opts, title=e.title, channel=e.channel,
+                user=user, url=youtube_video_url(e.id), fmt=fmt, options={**opts, "track": e.index or pos}, title=e.title, channel=e.channel,
                 thumbnail=_thumb(e.thumbnail), duration=e.duration, collection=collection or "Playlist",
             ))
     else:

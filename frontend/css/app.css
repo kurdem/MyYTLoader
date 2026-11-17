@@ -76,7 +76,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- Navigation: unten (mobil) / links (Desktop) ---------- */
 .nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--nav-h) + var(--safe-b));
   padding-bottom: var(--safe-b);
   background: rgba(15, 17, 21, .86);
@@ -191,6 +191,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .choice input { position: absolute; opacity: 0; pointer-events: none; }
 .choice b { font-size: 1rem; }
 .choice small { color: var(--text-faint); font-size: .78rem; line-height: 1.3; }
+.choice input.inline-num { position: static; opacity: 1; pointer-events: auto; width: 52px; min-height: 0; padding: 2px 6px; margin: 0 2px;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 6px; font-size: 16px; color: var(--text); }
 .choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .choice:has(input:disabled) { opacity: .45; cursor: not-allowed; }
 .choice:has(input:focus-visible) { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
@@ -209,6 +211,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim);
   font-weight: 600; font-size: .9rem; cursor: pointer;
 }
+.chips--wrap { flex-wrap: wrap; overflow: visible; }
 .chip.is-active { background: var(--text); color: var(--bg); border-color: var(--text); }
 
 /* ---------- Analyse-Ergebnis ---------- */
@@ -312,6 +315,21 @@ details.card[open] > summary { margin-bottom: 14px; }
 .owner { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-strong); font-weight: 650; }
 .owner svg { width: 14px; height: 14px; }
 .meter { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- Feeds ---------- */
+.episodes { list-style: none; margin: 0; padding: 0; }
+.episode { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; }
+.episode + .episode { border-top: 1px solid var(--border); }
+.episode__no { flex: none; width: 28px; text-align: right; color: var(--text-faint); font-variant-numeric: tabular-nums; font-weight: 700; }
+.episode__actions { display: flex; flex: none; }
+.episode__actions .icon-btn { width: 40px; min-height: 40px; }
+.file-btn { cursor: pointer; }
+.link-card { color: var(--text); gap: 14px; }
+.link-card:hover { background: var(--bg-elev-2); }
+select.sub-interval { flex: 0 1 auto; width: auto; min-height: 38px; padding: 0 10px; font-size: .875rem; }
+.detail__art { position: relative; }
+.detail__art .placeholder, .tile__art .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.55); }
+.detail__art .placeholder svg, .tile__art .placeholder svg { width: 40%; height: 40%; fill: none; stroke: currentColor; stroke-width: 1.5; }
 
 /* ---------- Diverses ---------- */
 .empty { text-align: center; padding: 48px 16px; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 12px; }

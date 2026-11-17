@@ -14,9 +14,11 @@ export class MediaView {
   }
 
   async render() {
-    const [m, feed] = await Promise.all([
+    const [m, feed, myFeeds, inFeeds] = await Promise.all([
       api(`/api/media/${this.id}`),
       api('/api/feed').catch(() => null),
+      api('/api/feeds').catch(() => []),
+      api(`/api/feeds/of-media/${this.id}`).catch(() => []),
     ]);
     this.m = m;
     // Direktlinks laufen über den eigenen Feed-Token – nur für eigene Medien möglich
@@ -64,6 +66,15 @@ export class MediaView {
           ${m.source_url ? html`<p class="faint ellipsis">Quelle: <a href="${m.source_url}" target="_blank" rel="noopener noreferrer">${m.source_url}</a></p>` : ''}
           ${m.description ? html`<details class="desc"><summary>Beschreibung</summary><div class="pre">${m.description}</div></details>` : ''}
 
+          ${own ? html`<section class="card stack" id="feeds-box">
+            <div class="row">${icons.rss}<b class="grow">In eigenen Feeds</b><a class="small" href="#/feeds">Feeds verwalten</a></div>
+            ${myFeeds.length ? html`<div class="chips chips--wrap">${myFeeds.map((f) => html`
+              <button class="chip ${inFeeds.includes(f.id) ? 'is-active' : ''}" type="button" data-feed="${f.id}"
+                aria-pressed="${inFeeds.includes(f.id) ? 'true' : 'false'}">${inFeeds.includes(f.id) ? '✓ ' : '+ '}${f.title}</button>`)}</div>
+              <p class="hint">Antippen fügt die Datei dem Feed hinzu bzw. entfernt sie.</p>`
+              : html`<p class="hint">Noch keine eigenen Feeds. Unter „Feeds“ kannst du z. B. einen Feed „Einschlafen“ anlegen.</p>`}
+          </section>` : ''}
+
           <details class="card" id="edit-box">
             <summary class="row">${icons.edit}<b>Metadaten bearbeiten</b></summary>
             <form class="stack" id="edit">
@@ -89,6 +100,24 @@ export class MediaView {
   }
 
   bind() {
+    const feedsBox = this.el.querySelector('#feeds-box');
+    if (feedsBox) {
+      feedsBox.addEventListener('click', async (e) => {
+        const chip = e.target.closest('[data-feed]');
+        if (!chip) return;
+        const on = chip.getAttribute('aria-pressed') === 'true';
+        chip.disabled = true;
+        try {
+          if (on) await api(`/api/feeds/${chip.dataset.feed}/items/${this.m.id}`, { method: 'DELETE' });
+          else await api(`/api/feeds/${chip.dataset.feed}/items`, { method: 'POST', body: { media_ids: [this.m.id] } });
+          const title = chip.textContent.replace(/^[✓+]\s*/, '');
+          chip.setAttribute('aria-pressed', on ? 'false' : 'true');
+          chip.classList.toggle('is-active', !on);
+          chip.textContent = `${on ? '+ ' : '✓ '}${title}`;
+          toast(on ? `Aus „${title}“ entfernt.` : `Zu „${title}“ hinzugefügt.`);
+        } catch (err) { toast(err.message, 'err'); } finally { chip.disabled = false; }
+      });
+    }
     const m = this.m;
     const share = this.el.querySelector('#share');
     if (share) {

@@ -51,6 +51,10 @@ def feed_info(request: Request, user: dict) -> dict:
             *({"name": c["name"], "url": _feed_url(base, token, c["name"])}
               for c in svc.library.collections(user["id"])),
         ],
+        "custom": [
+            {"id": f["id"], "name": f["title"], "type": f["type"], "url": f"{base}/feed/{token}/f/{f['id']}.xml"}
+            for f in svc.feeds.list(user["id"])
+        ],
     }
 
 
@@ -85,6 +89,34 @@ def podcast(token: str, request: Request, collection: str | None = None,
     )
     return Response(xml, media_type="application/rss+xml; charset=utf-8",
                     headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow"})
+
+
+@public.get("/{token}/f/{feed_id}.xml")
+def custom_feed(token: str, feed_id: str, request: Request) -> Response:
+    """Eigener Feed (Episoden oder Serie) über den Feed-Token seines Besitzers."""
+    svc = services(request)
+    owner = _feed_owner(request, token)
+    feed = svc.feeds.get(feed_id, owner)
+    base = base_url(request)
+    try:
+        svc.feeds.cover_file(feed_id, owner)
+        image = f"{base}/feed/{token}/f/{feed_id}/cover.jpg?v={feed['updated_at']}"
+    except UserError:
+        image = f"{base}/feed/{token}/artwork.png"
+    xml = build_feed(
+        svc.feeds.rss_items(feed), base, token, title=feed["title"],
+        description=feed.get("description") or f"Privater Feed von {svc.branding.name}.",
+        self_url=str(request.url), image_url=image, author=svc.branding.name,
+        serial=feed["type"] == "serial",
+    )
+    return Response(xml, media_type="application/rss+xml; charset=utf-8",
+                    headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow"})
+
+
+@public.get("/{token}/f/{feed_id}/cover.jpg")
+def custom_feed_cover(token: str, feed_id: str, request: Request) -> FileResponse:
+    owner = _feed_owner(request, token)
+    return FileResponse(services(request).feeds.cover_file(feed_id, owner))
 
 
 @public.api_route("/{token}/media/{media_id}/{filename}", methods=["GET", "HEAD"])
