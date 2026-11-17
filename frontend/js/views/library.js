@@ -1,7 +1,7 @@
 // Medienbibliothek: Suche, Filter, Sortierung, Kartenansicht
 import { api } from '../api.js';
 import { isAdmin, myId } from '../app.js';
-import { fmtBytes, fmtDate, fmtDuration, html, icons } from '../util.js';
+import { fmtBytes, fmtDate, fmtDuration, helpLink, html, icons } from '../util.js';
 
 const PREF_KEY = 'ytl:library';
 
@@ -29,6 +29,7 @@ export class LibraryView {
     this.el.innerHTML = String(html`
       <header class="page-head">
         <div><h1>Bibliothek</h1><p id="summary">&nbsp;</p></div>
+        ${helpLink('library')}
       </header>
       <div class="toolbar">
         <div class="toolbar__row">

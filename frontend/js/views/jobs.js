@@ -1,7 +1,7 @@
 // Download-Verwaltung: aktiv / fertig / fehlgeschlagen, Live-Fortschritt
 import { api } from '../api.js';
 import { isAdmin, myId, refreshJobs, store, upsertJob } from '../app.js';
-import { applyBars, busy, fmtDateTime, fmtDuration, fmtEta, fmtSpeed, html, icons, toast } from '../util.js';
+import { applyBars, busy, fmtDateTime, fmtDuration, fmtEta, fmtSpeed, helpLink, html, icons, toast } from '../util.js';
 
 const GROUPS = {
   active: ['queued', 'running', 'processing'],
@@ -23,7 +23,7 @@ export class JobsView {
     this.el.innerHTML = String(html`
       <header class="page-head">
         <div><h1>Aufträge</h1><p>Downloads laufen auf dem Server weiter – auch wenn du die Seite schließt.</p></div>
-        <button class="btn btn--sm" id="clear">${icons.trash}<span>Verlauf leeren</span></button>
+        <div class="row"><button class="btn btn--sm" id="clear">${icons.trash}<span>Verlauf leeren</span></button>${helpLink('jobs')}</div>
       </header>
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" data-tab="active">Aktiv<small data-count="active"></small></button>

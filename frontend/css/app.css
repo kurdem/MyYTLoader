@@ -86,6 +86,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .nav__brand { display: none; }
 .nav__footer { display: none; }
+.nav .nav__item--help { display: none; }
 .nav__item {
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -114,7 +115,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .nav__item:hover { background: var(--bg-elev); color: var(--text); }
   .nav__item.is-active { background: var(--accent-soft); }
   .nav__badge { position: static; margin-left: auto; }
-  .nav__footer { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+  .nav .nav__item--help { display: flex; margin-top: auto; }
+  .nav .nav__item--help svg circle { fill: none; stroke: currentColor; }
+  .nav__footer { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--border); }
   .nav__footer[hidden] { display: none; }
   .nav__user { display: flex; align-items: center; gap: 10px; padding: 6px 14px; color: var(--text-dim); font-weight: 650; min-width: 0; }
   .nav__user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -330,6 +333,27 @@ select.sub-interval { flex: 0 1 auto; width: auto; min-height: 38px; padding: 0 
 .detail__art { position: relative; }
 .detail__art .placeholder, .tile__art .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.55); }
 .detail__art .placeholder svg, .tile__art .placeholder svg { width: 40%; height: 40%; fill: none; stroke: currentColor; stroke-width: 1.5; }
+
+/* ---------- Hilfe ---------- */
+.help-link { flex: none; display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim); font-weight: 750; font-size: 1rem; }
+.help-link:hover { color: var(--text); background: var(--bg-hover); }
+.help-topic > summary { cursor: pointer; list-style: none; min-height: 32px; gap: 12px; flex-wrap: nowrap; }
+.help-topic > summary::-webkit-details-marker { display: none; }
+.help-topic[open] .help-chevron svg { transform: rotate(180deg); }
+.help-chevron svg { transition: transform .2s; color: var(--text-faint); }
+.help-body { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; line-height: 1.55; color: var(--text); }
+.help-body p { margin: 0; }
+.help-steps, .help-list { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 8px; }
+.help-steps li::marker { color: var(--accent-strong); font-weight: 750; }
+.help-tip { margin: 0; color: var(--text); }
+.help-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.help-table th, .help-table td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.help-table th { color: var(--text-faint); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+.help-faq { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.help-faq dt { font-weight: 700; margin-top: 10px; }
+.help-faq dd { margin: 0; color: var(--text-dim); }
+.help-body code { background: var(--bg-elev-2); padding: 1px 6px; border-radius: 4px; font-size: .9em; }
 
 /* ---------- Diverses ---------- */
 .empty { text-align: center; padding: 48px 16px; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 12px; }
