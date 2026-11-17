@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .auth import Auth
+from .branding import Branding
 from .config import Settings, get_settings
 from .db import Database
 from .deps import Services
@@ -22,6 +23,7 @@ from .library import Library
 from .maintenance import maintenance_loop
 from .media import FFmpeg
 from .routes import auth as auth_routes
+from .routes import branding as branding_routes
 from .routes import feed as feed_routes
 from .routes import jobs as job_routes
 from .routes import library as library_routes
@@ -57,6 +59,7 @@ def build_services(settings: Settings) -> Services:
         library=library, jobs=jobs,
         api_limiter=RateLimiter(settings.rate_limit_per_minute, 60),
         login_limiter=RateLimiter(10, 300),
+        branding=Branding(settings, db, ffmpeg),
     )
 
 
@@ -76,7 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         maint = asyncio.create_task(maintenance_loop(svc), name="maintenance")
         if not settings.auth_enabled:
             log.warning("AUTH_ENABLED=false – die Oberfläche ist ohne Anmeldung erreichbar!")
-        log.info("MyYTLoader %s gestartet (yt-dlp %s)", __version__, svc.ytdlp.version())
+        log.info("MyYTLoader %s gestartet als '%s' (yt-dlp %s)", __version__, svc.branding.name, svc.ytdlp.version())
         try:
             yield
         finally:
@@ -118,6 +121,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             h["Cache-Control"] = "no-cache"
         return response
 
+    app.include_router(branding_routes.public)
+    app.include_router(branding_routes.api)
     app.include_router(system_routes.public)
     app.include_router(system_routes.router)
     app.include_router(auth_routes.router)

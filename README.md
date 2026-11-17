@@ -28,6 +28,7 @@ im Browser abspielen oder als privaten Podcast-Feed abonnieren.
 - **Eigene Dateien hochladen**, z. B. eigene Aufnahmen für den privaten Podcast
 - **Mehrere Benutzer:** getrennte Bibliotheken, Aufträge und Podcast-Feeds pro Benutzer, Rollen Admin/Benutzer,
   Speicherkontingent und maximale parallele Aufträge pro Benutzer, Benutzerverwaltung in der Oberfläche
+- **Eigener Name und eigenes Icon** (Admin-Einstellung, ohne Neustart): App-Titel, Home-Bildschirm, PWA-Icons und Podcast-Artwork
 - **Sicherheit:** Login, CSRF-Schutz, Domain-Allowlist, SSRF-Schutz (keine internen Adressen), Pfadvalidierung,
   Rate Limiting, Größenlimit, keine Shell-Aufrufe mit Benutzereingaben, strikte Content-Security-Policy
 
@@ -168,6 +169,24 @@ Der erste Admin entsteht beim ersten Start aus `ADMIN_USERNAME`/`ADMIN_PASSWORD`
 und der bisherige Feed-Token gehen an den Admin, bestehende Podcast-Abos funktionieren weiter. Alte Dateien bleiben
 an ihrem Platz und wandern erst beim Bearbeiten der Metadaten in den Admin-Ordner.
 
+## Name und Icon ändern
+
+Admins finden unter **Mehr → Erscheinungsbild**:
+
+- **Name der App** (max. 40 Zeichen): erscheint im Browser-Tab, in der Navigation, auf der Login-Seite, als Name auf dem
+  Home-Bildschirm und als Titel/Autor des Podcast-Feeds.
+- **Icon** (PNG, JPG oder WebP, mind. 128 px, ideal 1024×1024): Daraus werden automatisch alle Größen erzeugt –
+  PWA-Icons (192/512, maskable mit Sicherheitsrand), Apple-Touch-Icon (180, ohne Transparenz) und
+  Podcast-Artwork (1400×1400). Nicht quadratische Bilder werden mittig zugeschnitten, transparente Bereiche
+  erhalten für iOS und Podcast-Apps den dunklen Theme-Hintergrund.
+- **Standard** stellt Name bzw. Icon wieder her.
+
+Die Änderung gilt sofort, ein Neustart ist nicht nötig. Gespeichert wird in `data/config/branding/` und in der Datenbank.
+
+> iOS übernimmt Name und Icon einer **bereits installierten** Home-Bildschirm-App nicht automatisch:
+> App vom Home-Bildschirm entfernen und in Safari erneut über **Teilen → Zum Home-Bildschirm** hinzufügen.
+> Podcast-Apps aktualisieren das Artwork beim nächsten Abruf des Feeds, manche mit Verzögerung.
+
 ## Privater Podcast-Feed
 
 Jeder Benutzer hat einen eigenen Feed mit eigenem Token. Unter **Mehr → Privater Podcast-Feed** stehen die Adressen:
@@ -260,9 +279,10 @@ backend/app/
   media.py              FFmpeg: Konvertierung, Loudnorm, Stille, Cover; Tagging mit mutagen
   jobs.py               Warteschlange mit fairem Scheduler (Limit pro Benutzer), Event-Bus für SSE (pro Benutzer gefiltert)
   library.py            Bibliothek: Abfragen, Bearbeiten, Löschen
-  feed.py               RSS-Feed mit iTunes-Namespace, Feed-Token
+  feed.py               RSS-Feed mit iTunes-Namespace
+  branding.py           App-Name und Icon, Icon-Erzeugung per FFmpeg, dynamisches index.html/Manifest
   maintenance.py        Temp-Bereinigung, Aufbewahrungsfrist, yt-dlp-Auto-Update
-  routes/               HTTP-Endpunkte (auth, users, jobs, library, feed, system)
+  routes/               HTTP-Endpunkte (auth, users, jobs, library, feed, branding, system)
 docker/entrypoint.sh    Volumes an PUID/PGID anpassen, Rechte abgeben, uvicorn starten
 ```
 

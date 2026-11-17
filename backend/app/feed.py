@@ -25,7 +25,7 @@ def _duration(seconds: float | None) -> str:
 
 
 def build_feed(items: list[dict], base: str, token: str, title: str, description: str,
-               self_url: str, image_url: str) -> str:
+               self_url: str, image_url: str, author: str | None = None) -> str:
     """Erzeugt RSS 2.0 mit iTunes-Namespace. itunes:block verhindert eine Aufnahme ins Apple-Verzeichnis."""
     e = escape
     out = [
@@ -40,7 +40,7 @@ def build_feed(items: list[dict], base: str, token: str, title: str, description
         "<language>de</language>",
         f"<lastBuildDate>{_rfc822(None)}</lastBuildDate>",
         "<generator>MyYTLoader</generator>",
-        f"<itunes:author>{e(title)}</itunes:author>",
+        f"<itunes:author>{e(author or title)}</itunes:author>",
         f"<itunes:summary>{e(description)}</itunes:summary>",
         f'<itunes:image href="{e(image_url)}"/>',
         f"<image><url>{e(image_url)}</url><title>{e(title)}</title><link>{e(base)}/</link></image>",

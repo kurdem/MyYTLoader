@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from .auth import Auth, is_admin
+from .branding import Branding
 from .config import Settings
 from .db import Database
 from .jobs import EventBus, JobManager
@@ -30,6 +31,7 @@ class Services:
     jobs: JobManager
     api_limiter: RateLimiter
     login_limiter: RateLimiter
+    branding: Branding
 
 
 def services(request: Request) -> Services:

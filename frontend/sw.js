@@ -1,5 +1,5 @@
 // Service Worker: cached nur die App-Shell. API, Medien und Feeds gehen immer ans Netz.
-const CACHE = 'ytl-shell-v2';
+const CACHE = 'ytl-shell-v3';
 const SHELL = [
   './',
   'index.html',
@@ -14,9 +14,6 @@ const SHELL = [
   'js/views/more.js',
   'js/views/users.js',
   'manifest.webmanifest',
-  'icons/icon.svg',
-  'icons/icon-192.png',
-  'icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {

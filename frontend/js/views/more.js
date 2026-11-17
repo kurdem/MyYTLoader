@@ -1,6 +1,6 @@
 // Mehr: Podcast-Feed, eigene Dateien, Wartung, System, iOS-Tipps
 import { api, upload } from '../api.js';
-import { isAdmin, logout, store, upsertJob } from '../app.js';
+import { appName, applyBranding, isAdmin, logout, store, upsertJob } from '../app.js';
 import { applyBars, busy, copyText, fmtBytes, fmtDateTime, html, icons, isIOS, isStandalone, toast } from '../util.js';
 
 export class MoreView {
@@ -9,7 +9,10 @@ export class MoreView {
   }
 
   async render() {
-    const [sys, feed, me] = await Promise.all([api('/api/system'), api('/api/feed'), api('/api/auth/me')]);
+    const [sys, feed, me, brand] = await Promise.all([
+      api('/api/system'), api('/api/feed'), api('/api/auth/me'), api('/api/branding'),
+    ]);
+    this.brand = brand;
     store.system = sys;
     store.me = me;
     const v = sys.versions;
@@ -21,7 +24,7 @@ export class MoreView {
       <header class="page-head"><div><h1>Mehr</h1><p>Podcast-Feed, eigene Dateien und Verwaltung.</p></div></header>
       <div class="stack">
         ${isIOS && !isStandalone ? html`<section class="notice">Tipp: In Safari auf <b>Teilen</b> → <b>Zum Home-Bildschirm</b> tippen –
-          dann startet MyYTLoader wie eine App.</section>` : ''}
+          dann startet ${appName()} wie eine App.</section>` : ''}
 
         <section class="card stack">
           <div class="row">${icons.user}<h2 class="grow">${acc.username}</h2>
@@ -115,10 +118,41 @@ export class MoreView {
           </div>
         </section>
 
+        ${admin ? html`<section class="card stack" id="branding">
+          <h2>Erscheinungsbild</h2>
+          <div class="row">
+            <img class="brand-preview" src="${brand.icons['icon-512.png'].replace(/^\//, '')}" alt="Aktuelles Icon" width="72" height="72">
+            <div class="grow">
+              <b>${brand.name}</b>
+              <p class="faint">${brand.custom_icon ? 'Eigenes Icon' : 'Standard-Icon'}</p>
+            </div>
+          </div>
+          <form class="stack" id="brand-name">
+            <label class="field"><span>Name der App</span>
+              <input name="name" maxlength="40" required value="${brand.name}" placeholder="${brand.default_name}"></label>
+            <div class="row">
+              <button class="btn btn--primary" type="submit">Name speichern</button>
+              ${brand.name !== brand.default_name ? html`<button class="btn btn--sm btn--ghost" type="button" id="brand-name-reset">Standard</button>` : ''}
+            </div>
+          </form>
+          <form class="stack" id="brand-icon">
+            <label class="field"><span>Neues Icon (PNG, JPG oder WebP, quadratisch, ideal 1024×1024 px)</span>
+              <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required></label>
+            <p class="hint">Nicht quadratische Bilder werden mittig zugeschnitten. Daraus entstehen automatisch App-Icons,
+              Home-Bildschirm-Icon und Podcast-Artwork.</p>
+            <div class="row">
+              <button class="btn btn--primary" type="submit">Icon hochladen</button>
+              ${brand.custom_icon ? html`<button class="btn btn--sm btn--ghost" type="button" id="brand-icon-reset">Standard-Icon</button>` : ''}
+            </div>
+          </form>
+          <p class="hint">Bereits auf dem Home-Bildschirm installierte Apps übernehmen Name und Icon erst,
+            wenn sie entfernt und neu hinzugefügt werden (Einschränkung von iOS).</p>
+        </section>` : ''}
+
         <section class="card stack">
           <h2>System</h2>
           <dl class="kv">
-            <dt>MyYTLoader</dt><dd>${v.app}</dd>
+            <dt>Version</dt><dd>${v.app}</dd>
             <dt>yt-dlp</dt><dd>${v.yt_dlp || 'nicht gefunden'} (${sys.ytdlp.channel}${sys.ytdlp.auto_update ? ', Auto-Update' : ''})</dd>
             <dt>Letztes Update</dt><dd>${sys.ytdlp.last_update ? fmtDateTime(sys.ytdlp.last_update) : '–'}</dd>
             <dt>FFmpeg</dt><dd>${v.ffmpeg || 'nicht gefunden'}</dd>
@@ -136,7 +170,7 @@ export class MoreView {
         <section class="card stack">
           <h2>Rechtliches</h2>
           <p class="muted small">Lade nur Inhalte herunter, für die du die erforderlichen Rechte oder eine Erlaubnis hast.
-            MyYTLoader umgeht keine DRM- oder Zugriffsschutzmaßnahmen und speichert keine Zugangsdaten.</p>
+            Diese App umgeht keine DRM- oder Zugriffsschutzmaßnahmen und speichert keine Zugangsdaten.</p>
         </section>
 
         ${store.me && store.me.auth_enabled ? html`<button class="btn btn--block" id="logout">Abmelden</button>` : ''}
@@ -208,6 +242,7 @@ export class MoreView {
         });
       });
     }
+    this.bindBranding($);
     const temp = $('#clear-temp');
     if (temp) temp.addEventListener('click', async (e) => {
       await busy(e.currentTarget, async () => {
@@ -226,5 +261,46 @@ export class MoreView {
     });
     const lo = $('#logout');
     if (lo) lo.addEventListener('click', logout);
+  }
+
+  bindBranding($) {
+    const nameForm = $('#brand-name');
+    if (!nameForm) return;
+    const done = (info, msg) => { applyBranding(info); toast(msg); this.render(); };
+    nameForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      await busy(form.querySelector('button[type=submit]'), async () => {
+        try {
+          done(await api('/api/branding', { method: 'PUT', body: { name: form.elements.name.value } }), 'Name gespeichert.');
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    });
+    const nameReset = $('#brand-name-reset');
+    if (nameReset) {
+      nameReset.addEventListener('click', async () => {
+        await busy(nameReset, async () => {
+          try { done(await api('/api/branding', { method: 'PUT', body: { name: null } }), 'Standardname wiederhergestellt.'); } catch (err) { toast(err.message, 'err'); }
+        });
+      });
+    }
+    $('#brand-icon').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const data = new FormData();
+      data.append('file', form.elements.file.files[0]);
+      await busy(form.querySelector('button[type=submit]'), async () => {
+        try { done(await upload('/api/branding/icon', data, () => {}), 'Icon gespeichert.'); } catch (err) { toast(err.message, 'err', 6000); }
+      });
+    });
+    const iconReset = $('#brand-icon-reset');
+    if (iconReset) {
+      iconReset.addEventListener('click', async () => {
+        if (!confirm('Eigenes Icon entfernen und Standard-Icon verwenden?')) return;
+        await busy(iconReset, async () => {
+          try { done(await api('/api/branding/icon', { method: 'DELETE' }), 'Standard-Icon wiederhergestellt.'); } catch (err) { toast(err.message, 'err'); }
+        });
+      });
+    }
   }
 }
