@@ -159,6 +159,22 @@ async function boot() {
   else showLogin();
 }
 
+/** Name/Icon nach einer Änderung sofort im geöffneten Dokument übernehmen. */
+export function applyBranding(info) {
+  document.title = info.name;
+  document.querySelectorAll('meta[name="apple-mobile-web-app-title"], meta[name="application-name"]')
+    .forEach((m) => m.setAttribute('content', info.name));
+  document.querySelectorAll('[data-brand-name]').forEach((el) => { el.textContent = info.name; });
+  document.querySelectorAll('[data-brand-icon]').forEach((el) => {
+    const url = info.icons[el.dataset.brandIcon];
+    if (url) el.setAttribute(el.tagName === 'LINK' ? 'href' : 'src', url.replace(/^\//, ''));
+  });
+  const manifest = document.querySelector('link[rel="manifest"]');
+  if (manifest) manifest.setAttribute('href', `manifest.webmanifest?v=${info.version}`);
+}
+
+export const appName = () => (document.querySelector('[data-brand-name]') || {}).textContent || 'MyYTLoader';
+
 export async function logout() {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   location.hash = '#/';

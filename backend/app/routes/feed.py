@@ -73,12 +73,13 @@ def podcast(token: str, request: Request, collection: str | None = None,
     owner = _feed_owner(request, token)
     base = base_url(request)
     items = svc.library.list(owner["id"], kind=None if kind == "all" else kind, collection=collection, limit=2000)
-    title = collection or ("MyYTLoader – Videos" if kind == "video" else "MyYTLoader")
+    app_name = svc.branding.name
+    title = collection or (f"{app_name} – Videos" if kind == "video" else app_name)
     image = f"{base}/feed/{token}/artwork.png"
     if collection and items and items[0]["has_cover"]:
         image = f"{base}/feed/{token}/cover/{items[0]['id']}.jpg"
     xml = build_feed(
-        items, base, token, title=title,
+        items, base, token, title=title, author=app_name,
         description="Privater Feed deiner selbst gehosteten Medienbibliothek.",
         self_url=str(request.url), image_url=image,
     )
@@ -103,7 +104,7 @@ def feed_cover(token: str, media_id: str, request: Request) -> FileResponse:
 @public.get("/{token}/artwork.png")
 def artwork(token: str, request: Request) -> FileResponse:
     _feed_owner(request, token)
-    path = services(request).settings.frontend_path / "icons" / "podcast-1400.png"
+    path = services(request).branding.file("podcast-1400.png")
     if not path.is_file():
         raise UserError("Kein Artwork vorhanden.", 404)
     return FileResponse(path, media_type="image/png")
