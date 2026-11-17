@@ -128,5 +128,6 @@ export const icons = {
   inbox: raw('<svg viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l3-8h10l3 8v6H4z"/></svg>'),
   plus: raw('<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'),
   user: raw('<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'),
+  logout: raw('<svg viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>'),
   vlc: raw('<svg viewBox="0 0 24 24"><path d="M12 3 5 20h14zM8 13h8"/></svg>'),
 };
