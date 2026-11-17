@@ -1,5 +1,6 @@
 // Detailseite: Abspielen, iOS-Download, Teilen, VLC, Metadaten bearbeiten, Löschen
 import { api } from '../api.js';
+import { myId } from '../app.js';
 import { busy, fmtBytes, fmtDate, fmtDuration, html, icons, isIOS, toast } from '../util.js';
 
 const MIME = { m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', flac: 'audio/flac', mp4: 'video/mp4', webm: 'video/webm' };
@@ -18,7 +19,9 @@ export class MediaView {
       api('/api/feed').catch(() => null),
     ]);
     this.m = m;
-    this.feed = feed;
+    // Direktlinks laufen über den eigenen Feed-Token – nur für eigene Medien möglich
+    const own = m.user_id === myId();
+    this.feed = own ? feed : null;
     const fileUrl = `/api/media/${m.id}/file`;
     const downloadUrl = `/api/media/${m.id}/download`;
     const canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File([''], `x.${m.format}`, { type: MIME[m.format] })] }));
@@ -41,6 +44,7 @@ export class MediaView {
           <div>
             <h1>${m.title}</h1>
             <p class="muted">${m.artist || ''}${m.collection ? html` · ${m.collection}` : ''}</p>
+            ${!own && m.owner ? html`<p class="owner">${icons.user}Gehört ${m.owner}</p>` : ''}
           </div>
           <div class="facts">
             <div class="fact"><span>Format</span><b>${m.format.toUpperCase()}</b></div>
@@ -51,8 +55,8 @@ export class MediaView {
           <div class="actions">
             <a class="btn btn--primary btn--lg" href="${downloadUrl}" download="${m.filename}">${icons.download}<span>Herunterladen</span></a>
             ${canShareFiles && m.size <= SHARE_LIMIT ? html`<button class="btn" id="share">${icons.share}<span>Teilen …</span></button>` : ''}
-            ${feed ? html`<a class="btn" id="vlc" href="#">${icons.vlc}<span>In VLC öffnen</span></a>` : ''}
-            ${feed ? html`<button class="btn" id="copy-link">${icons.copy}<span>Direktlink kopieren</span></button>` : ''}
+            ${this.feed ? html`<a class="btn" id="vlc" href="#">${icons.vlc}<span>In VLC öffnen</span></a>` : ''}
+            ${this.feed ? html`<button class="btn" id="copy-link">${icons.copy}<span>Direktlink kopieren</span></button>` : ''}
           </div>
           ${isIOS ? html`<div class="notice">Safari: Nach „Herunterladen“ landet die Datei in der <b>Dateien</b>-App unter „Downloads“.
             Von dort kannst du sie per „Teilen“ an VLC, Musik- oder Podcast-Player übergeben.</div>` : ''}

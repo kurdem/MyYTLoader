@@ -296,6 +296,10 @@ class YtDlp:
 
         output = "\n".join(tail)
         if too_large or "larger than max-filesize" in output:
+            if max_bytes < self.s.max_file_size_bytes:
+                raise UserError(
+                    f"Die Datei ist größer als dein freies Speicherkontingent ({max_bytes // 1048576} MB)."
+                )
             raise UserError(
                 f"Die Datei überschreitet die maximale Dateigröße von {self.s.max_file_size_mb} MB."
             )

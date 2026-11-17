@@ -226,6 +226,7 @@ details.desc .pre { color: var(--text-dim); font-size: .9rem; max-height: 260px;
 }
 .badge--soft { background: var(--bg-elev-2); color: var(--text-dim); }
 .badge--accent { background: var(--accent-soft); color: var(--accent-strong); }
+.badge--warn { background: var(--warn-soft); color: var(--warn); }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 650; }
 .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .status--queued { color: var(--text-dim); }
@@ -238,6 +239,7 @@ details.desc .pre { color: var(--text-dim); font-size: .9rem; max-height: 260px;
 
 .progress { height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden; }
 .progress__bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-strong)); border-radius: 3px; transition: width .4s ease; }
+.progress--warn .progress__bar { background: linear-gradient(90deg, var(--warn), var(--err)); }
 .progress--indeterminate .progress__bar { width: 35% !important; animation: indet 1.2s ease-in-out infinite; }
 @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 
@@ -292,6 +294,15 @@ details.card[open] > summary { margin-bottom: 14px; }
 .fact b { font-size: .95rem; }
 .actions { display: grid; gap: 10px; }
 @media (min-width: 520px) { .actions { grid-template-columns: 1fr 1fr; } .actions .btn--lg { grid-column: 1 / -1; } }
+
+/* ---------- Benutzer ---------- */
+.user-row { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+.user-row + .user-row { border-top: 1px solid var(--border); }
+.user-edit { padding-top: 6px; }
+.user-edit .row > .field { flex: 1 1 140px; }
+.owner { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-strong); font-weight: 650; }
+.owner svg { width: 14px; height: 14px; }
+.meter { display: flex; flex-direction: column; gap: 6px; }
 
 /* ---------- Diverses ---------- */
 .empty { text-align: center; padding: 48px 16px; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 12px; }

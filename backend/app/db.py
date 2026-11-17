@@ -62,6 +62,26 @@ MIGRATIONS: list[str] = [
         value TEXT NOT NULL
     );
     """,
+    # v2: mehrere Benutzer
+    """
+    CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',         -- admin | user
+        quota_mb INTEGER,                          -- NULL/0 = unbegrenzt
+        max_jobs INTEGER,                          -- NULL/0 = unbegrenzt
+        feed_token TEXT UNIQUE,
+        disabled INTEGER NOT NULL DEFAULT 0,
+        session_version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+    );
+    ALTER TABLE jobs ADD COLUMN user_id TEXT;
+    ALTER TABLE media ADD COLUMN user_id TEXT;
+    ALTER TABLE media ADD COLUMN original_size INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX idx_jobs_user ON jobs(user_id, status);
+    CREATE INDEX idx_media_user ON media(user_id, created_at);
+    """,
 ]
 
 

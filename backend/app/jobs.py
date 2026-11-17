@@ -15,16 +15,20 @@ import time
 import uuid
 from pathlib import Path
 
+from .auth import is_admin
 from .config import AUDIO_FORMATS, Settings
 from .db import Database, job_to_api, utcnow
 from .library import Library
 from .media import FFmpeg, Metadata, write_tags
 from .security import UserError, media_basename, safe_join, sanitize_filename, unique_path
+from .users import Users
 from .ytdlp import Progress, YtDlp, format_selector
 
 log = logging.getLogger("ytloader.jobs")
 
 ACTIVE = ("queued", "running", "processing")
+SELECT = "SELECT j.*, u.username AS owner FROM jobs j LEFT JOIN users u ON u.id = j.user_id"
+QUOTA_EXCEEDED = "Dein Speicherkontingent ist erschöpft. Bitte alte Dateien löschen oder den Admin fragen."
 DOWNLOAD_SHARE = 0.85  # Anteil des Downloads am Gesamtfortschritt
 
 
@@ -32,19 +36,20 @@ class EventBus:
     """Verteilt Ereignisse an alle SSE-Clients (thread-sicher)."""
 
     def __init__(self) -> None:
-        self._subs: set[asyncio.Queue] = set()
+        # Queue -> (user_id, ist_admin): Ereignisse gehen nur an Besitzer und Admins
+        self._subs: dict[asyncio.Queue, tuple[str, bool]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def bind(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
 
-    def subscribe(self) -> asyncio.Queue:
+    def subscribe(self, user: dict) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=1000)
-        self._subs.add(q)
+        self._subs[q] = (user["id"], is_admin(user))
         return q
 
     def unsubscribe(self, q: asyncio.Queue) -> None:
-        self._subs.discard(q)
+        self._subs.pop(q, None)
 
     def publish(self, event: dict) -> None:
         if self._loop is None or self._loop.is_closed():
@@ -55,7 +60,10 @@ class EventBus:
             pass
 
     def _fanout(self, event: dict) -> None:
-        for q in list(self._subs):
+        owner = event.get("user_id")
+        for q, (user_id, admin) in list(self._subs.items()):
+            if not admin and (owner is None or owner != user_id):
+                continue
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
@@ -64,9 +72,10 @@ class EventBus:
 
 class JobManager:
     def __init__(self, settings: Settings, db: Database, ytdlp: YtDlp, ffmpeg: FFmpeg,
-                 library: Library, bus: EventBus):
+                 library: Library, users: Users, bus: EventBus):
         self.s = settings
         self.db = db
+        self.users = users
         self.ytdlp = ytdlp
         self.ffmpeg = ffmpeg
         self.library = library
@@ -124,7 +133,14 @@ class JobManager:
 
     def _claim(self) -> dict | None:
         with self._lock:
-            row = self.db.one("SELECT * FROM jobs WHERE status='queued' ORDER BY created_at, rowid LIMIT 1")
+            # ältester wartender Auftrag, dessen Besitzer sein Limit paralleler Aufträge nicht erreicht hat
+            row = self.db.one(
+                "SELECT j.* FROM jobs j LEFT JOIN users u ON u.id = j.user_id "
+                "WHERE j.status='queued' AND (u.max_jobs IS NULL OR u.max_jobs <= 0 OR "
+                "  (SELECT COUNT(*) FROM jobs r WHERE r.user_id = j.user_id "
+                "   AND r.status IN ('running','processing')) < u.max_jobs) "
+                "ORDER BY j.created_at, j.rowid LIMIT 1"
+            )
             if not row:
                 return None
             self.db.update("jobs", row["id"], {
@@ -134,11 +150,14 @@ class JobManager:
             return row
 
     # ---------------------------------------------------------------- API
-    def create(self, *, url: str, fmt: str, options: dict, kind: str = "url", title: str | None = None,
+    def create(self, *, user: dict, url: str, fmt: str, options: dict, kind: str = "url", title: str | None = None,
                channel: str | None = None, thumbnail: str | None = None, duration: float | None = None,
                collection: str | None = None) -> dict:
+        if self.users.remaining_bytes(user) == 0:
+            raise UserError(QUOTA_EXCEEDED, status_code=413)
         job = {
             "id": uuid.uuid4().hex,
+            "user_id": user["id"],
             "kind": kind,
             "url": url,
             "title": title,
@@ -158,30 +177,32 @@ class JobManager:
         self.wake()
         return self.get(job["id"])
 
-    def get(self, job_id: str) -> dict:
-        row = self.db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
-        if not row:
+    def get(self, job_id: str, user: dict | None = None) -> dict:
+        row = self.db.one(f"{SELECT} WHERE j.id=?", (job_id,))
+        if not row or (user is not None and not is_admin(user) and row["user_id"] != user["id"]):
             raise UserError("Auftrag nicht gefunden.", status_code=404)
         return job_to_api(row)
 
-    def list(self, status: str | None = None, limit: int = 500) -> list[dict]:
+    def list(self, user: dict, status: str | None = None, limit: int = 500) -> list[dict]:
+        """Admins sehen die gesamte Warteschlange, Benutzer nur ihre eigenen Aufträge."""
         groups = {
             "active": ACTIVE,
             "done": ("done",),
             "failed": ("failed", "cancelled"),
         }
+        where, params = [], []
+        if not is_admin(user):
+            where.append("j.user_id=?")
+            params.append(user["id"])
         if status in groups:
-            marks = ",".join("?" for _ in groups[status])
-            rows = self.db.all(
-                f"SELECT * FROM jobs WHERE status IN ({marks}) ORDER BY created_at DESC, rowid DESC LIMIT ?",
-                (*groups[status], limit),
-            )
-        else:
-            rows = self.db.all("SELECT * FROM jobs ORDER BY created_at DESC, rowid DESC LIMIT ?", (limit,))
+            where.append(f"j.status IN ({','.join('?' for _ in groups[status])})")
+            params += groups[status]
+        sql = SELECT + (" WHERE " + " AND ".join(where) if where else "")
+        rows = self.db.all(sql + " ORDER BY j.created_at DESC, j.rowid DESC LIMIT ?", (*params, limit))
         return [job_to_api(r) for r in rows]
 
-    def cancel(self, job_id: str) -> dict:
-        job = self.get(job_id)
+    def cancel(self, job_id: str, user: dict | None = None) -> dict:
+        job = self.get(job_id, user)
         if job["status"] not in ACTIVE:
             raise UserError("Nur laufende oder wartende Aufträge können abgebrochen werden.", 409)
         with self._lock:
@@ -198,12 +219,15 @@ class JobManager:
         self._publish(job_id, force=True)
         return self.get(job_id)
 
-    def retry(self, job_id: str) -> dict:
-        job = self.get(job_id)
+    def retry(self, job_id: str, user: dict | None = None) -> dict:
+        job = self.get(job_id, user)
         if job["status"] not in ("failed", "cancelled", "done"):
             raise UserError("Dieser Auftrag läuft noch.", 409)
         if job["kind"] != "url":
             raise UserError("Uploads können nicht wiederholt werden. Bitte Datei erneut hochladen.", 409)
+        owner = self.users.get(job["user_id"])
+        if owner and self.users.remaining_bytes(owner) == 0:
+            raise UserError(QUOTA_EXCEEDED, status_code=413)
         self.db.update("jobs", job_id, {
             "status": "queued", "stage": "Wartet", "progress": 0, "speed": None, "eta": None,
             "error": None, "media_id": None, "started_at": None, "finished_at": None, "created_at": utcnow(),
@@ -212,17 +236,30 @@ class JobManager:
         self.wake()
         return self.get(job_id)
 
-    def delete(self, job_id: str) -> None:
-        job = self.get(job_id)
+    def delete(self, job_id: str, user: dict | None = None) -> None:
+        job = self.get(job_id, user)
         if job["status"] in ACTIVE:
             raise UserError("Laufende Aufträge bitte zuerst abbrechen.", 409)
         self.db.execute("DELETE FROM jobs WHERE id=?", (job_id,))
-        self.bus.publish({"type": "job_deleted", "id": job_id})
+        self.bus.publish({"type": "job_deleted", "id": job_id, "user_id": job["user_id"]})
 
-    def clear_finished(self) -> int:
-        n = self.db.execute("DELETE FROM jobs WHERE status IN ('done','failed','cancelled')")
-        self.bus.publish({"type": "jobs_cleared"})
+    def clear_finished(self, user: dict) -> int:
+        """Admins leeren den gesamten Verlauf, Benutzer nur ihren eigenen."""
+        sql = "DELETE FROM jobs WHERE status IN ('done','failed','cancelled')"
+        if is_admin(user):
+            n = self.db.execute(sql)
+        else:
+            n = self.db.execute(sql + " AND user_id=?", (user["id"],))
+        self.bus.publish({"type": "jobs_cleared", "user_id": user["id"]})
         return n
+
+    def cancel_all_of(self, user_id: str) -> None:
+        for row in self.db.all("SELECT id FROM jobs WHERE user_id=? AND status IN ('queued','running','processing')",
+                               (user_id,)):
+            try:
+                self.cancel(row["id"])
+            except UserError:
+                pass
 
     def is_active(self, job_id: str) -> bool:
         row = self.db.one("SELECT status FROM jobs WHERE id=?", (job_id,))
@@ -253,9 +290,9 @@ class JobManager:
         if not force and now - self._last_publish.get(job_id, 0) < 0.5:
             return
         self._last_publish[job_id] = now
-        row = self.db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
+        row = self.db.one(f"{SELECT} WHERE j.id=?", (job_id,))
         if row:
-            self.bus.publish({"type": "job", "job": job_to_api(row)})
+            self.bus.publish({"type": "job", "job": job_to_api(row), "user_id": row["user_id"]})
 
     def _run(self, job: dict) -> None:
         job_id = job["id"]
@@ -267,7 +304,12 @@ class JobManager:
         workdir.mkdir(parents=True, exist_ok=True)
         register = self._register(job_id)
         source: Path | None = None
+        owner = self.users.get(job.get("user_id"))
         try:
+            remaining = self.users.remaining_bytes(owner) if owner else None
+            if remaining == 0:
+                raise UserError(QUOTA_EXCEEDED)
+            max_bytes = self.s.max_file_size_bytes if remaining is None else min(self.s.max_file_size_bytes, remaining)
             info: dict = {}
             cover_src: Path | None = None
             if job["kind"] == "upload":
@@ -286,7 +328,7 @@ class JobManager:
                               speed=p.speed, eta=p.eta)
 
                 result = self.ytdlp.download(
-                    job["url"], selector, workdir / "dl", merge, self.s.max_file_size_bytes,
+                    job["url"], selector, workdir / "dl", merge, max_bytes,
                     self.s.ytdlp_sleep_interval if job.get("collection") else 0,
                     on_progress, register,
                 )
@@ -296,10 +338,10 @@ class JobManager:
             self._check_cancel(job_id)
             self._set(job_id, force=True, status="processing", stage="Konvertierung", progress=share,
                       speed=None, eta=None)
-            media = self._process(job, opts, source, info, cover_src, workdir, share, register)
+            media = self._process(job, opts, source, info, cover_src, workdir, share, register, owner)
             self._set(job_id, force=True, status="done", stage=None, progress=1, media_id=media["id"],
                       finished_at=utcnow(), title=media["title"], channel=media["artist"])
-            self.bus.publish({"type": "media", "media": media})
+            self.bus.publish({"type": "media", "media": media, "user_id": job.get("user_id")})
         except UserError as exc:
             cancelled = job_id in self._cancelled
             self._set(job_id, force=True, status="cancelled" if cancelled else "failed", stage=None,
@@ -325,7 +367,7 @@ class JobManager:
                 p.unlink(missing_ok=True)
 
     def _process(self, job: dict, opts: dict, source: Path, info: dict, cover_src: Path | None,
-                 workdir: Path, share: float, register) -> dict:
+                 workdir: Path, share: float, register, owner: dict | None = None) -> dict:
         job_id = job["id"]
         fmt = job["format"]
         is_audio = fmt in AUDIO_FORMATS
@@ -371,10 +413,18 @@ class JobManager:
         self._set(job_id, force=True, stage="Metadaten")
         write_tags(out, fmt, meta, cover)
 
+        # Kontingent: erst nach der Konvertierung steht die endgültige Größe fest
+        needed = out.stat().st_size + (source.stat().st_size if opts.get("keep_original") else 0)
+        remaining = self.users.remaining_bytes(owner) if owner else None
+        if remaining is not None and needed > remaining:
+            raise UserError(
+                f"Nicht genug Speicherkontingent: benötigt {needed // 1048576} MB, frei {remaining // 1048576} MB."
+            )
+
         media_id = uuid.uuid4().hex
-        folder = self.s.download_path
+        folder = self.users.folder(owner)
         if collection:
-            folder = safe_join(self.s.download_path, sanitize_filename(collection))
+            folder = safe_join(folder, sanitize_filename(collection))
         folder.mkdir(parents=True, exist_ok=True)
         dest = unique_path(folder / f"{media_basename(meta.artist, meta.title)}.{fmt}")
         shutil.move(str(out), dest)
@@ -387,15 +437,18 @@ class JobManager:
             cover_rel = str(cover_dest.relative_to(self.s.download_path))
 
         original_rel = None
+        original_size = 0
         if opts.get("keep_original"):
             self.s.originals_path.mkdir(parents=True, exist_ok=True)
             orig_dest = self.s.originals_path / f"{media_id}{source.suffix}"
             shutil.move(str(source), orig_dest)
             original_rel = str(orig_dest.relative_to(self.s.download_path))
+            original_size = orig_dest.stat().st_size
 
         final_probe = self.ffmpeg.probe(dest)
         record = {
             "id": media_id,
+            "user_id": job.get("user_id"),
             "job_id": job_id,
             "source_url": None if job["kind"] == "upload" else (info.get("webpage_url") or job["url"]),
             "source_id": info.get("id"),
@@ -407,6 +460,7 @@ class JobManager:
             "format": fmt,
             "path": str(dest.relative_to(self.s.download_path)),
             "original_path": original_rel,
+            "original_size": original_size,
             "cover_path": cover_rel,
             "size": dest.stat().st_size,
             "collection": collection,

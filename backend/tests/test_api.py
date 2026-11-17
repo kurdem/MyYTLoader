@@ -91,7 +91,7 @@ def test_full_audio_flow(authed, env):
     r = authed.patch(f"/api/media/{media['id']}", json={"title": "Neuer Titel", "collection": "Podcasts"})
     assert r.status_code == 200, r.text
     edited = r.json()
-    assert edited["path"] == "Podcasts/Testkanal - Neuer Titel.m4a"
+    assert edited["path"] == "admin/Podcasts/Testkanal - Neuer Titel.m4a"
     assert (env / "downloads" / edited["path"]).is_file()
     assert not (env / "downloads" / media["path"]).exists()
 
@@ -121,7 +121,7 @@ def test_full_audio_flow(authed, env):
     authed.post("/api/auth/login", json={"username": "admin", "password": "geheim"})
     assert authed.delete(f"/api/media/{media['id']}").status_code == 200
     assert not (env / "downloads" / edited["path"]).exists()
-    assert not (env / "downloads" / "Podcasts").exists()
+    assert not (env / "downloads" / "admin" / "Podcasts").exists()
 
 
 def test_video_flow_mp4(authed):
@@ -201,7 +201,7 @@ def test_upload_own_audio(authed, fixtures):
     job = wait_for(authed, r.json()["jobs"][0]["id"])
     assert job["status"] == "done", job
     media = authed.get(f"/api/media/{job['media_id']}").json()
-    assert media["path"] == "Mein Podcast/Ich - Episode 1.mp3"
+    assert media["path"] == "admin/Mein Podcast/Ich - Episode 1.mp3"
     assert media["source_url"] is None
 
 

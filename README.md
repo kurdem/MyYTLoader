@@ -26,6 +26,8 @@ im Browser abspielen oder als privaten Podcast-Feed abonnieren.
 - **Privater Podcast-RSS-Feed:** gesamte Bibliothek, Videos oder einzelne Ordner abonnierbar, geschützt per geheimem Token,
   `itunes:block`, damit der Feed nie in einem öffentlichen Verzeichnis landet
 - **Eigene Dateien hochladen**, z. B. eigene Aufnahmen für den privaten Podcast
+- **Mehrere Benutzer:** getrennte Bibliotheken, Aufträge und Podcast-Feeds pro Benutzer, Rollen Admin/Benutzer,
+  Speicherkontingent und maximale parallele Aufträge pro Benutzer, Benutzerverwaltung in der Oberfläche
 - **Sicherheit:** Login, CSRF-Schutz, Domain-Allowlist, SSRF-Schutz (keine internen Adressen), Pfadvalidierung,
   Rate Limiting, Größenlimit, keine Shell-Aufrufe mit Benutzereingaben, strikte Content-Security-Policy
 
@@ -64,7 +66,7 @@ docker compose logs myytloader | grep Passwort
 
 | Host (Standard)        | Container    | Inhalt                                                 |
 |------------------------|--------------|--------------------------------------------------------|
-| `./data/downloads`     | `/downloads` | fertige Dateien, Unterordner pro Playlist, `.covers/`  |
+| `./data/downloads`     | `/downloads` | fertige Dateien: `<benutzer>/<ordner>/Kanal - Titel.m4a`, `.covers/` |
 | `./data/database`      | `/database`  | SQLite-Datenbank                                       |
 | `./data/config`        | `/config`    | Secret, generiertes Passwort, aktualisiertes yt-dlp    |
 | `./data/temp`          | `/temp`      | Zwischendateien (werden automatisch bereinigt)         |
@@ -80,7 +82,10 @@ Den Download-Ordner kannst du per `HOST_DOWNLOAD_PATH` z. B. direkt auf ein NAS-
 | `PUID` / `PGID` | `1000` | Benutzer/Gruppe, unter dem die App läuft |
 | `HOST_DOWNLOAD_PATH` | `./data/downloads` | Ablage der fertigen Dateien auf dem Host |
 | `AUTH_ENABLED` | `true` | Login aktivieren (dringend empfohlen) |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / leer | Zugangsdaten |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / leer | erster Admin, wird **nur beim ersten Start** angelegt |
+| `ADMIN_PASSWORD_RESET` | `false` | `true` setzt beim Start das Passwort von `ADMIN_USERNAME` auf `ADMIN_PASSWORD` (Notfall) |
+| `DEFAULT_USER_QUOTA_MB` | `0` | Vorgabe-Kontingent für neue Benutzer (0 = unbegrenzt) |
+| `DEFAULT_USER_MAX_JOBS` | `0` | Vorgabe für parallele Aufträge neuer Benutzer (0 = unbegrenzt) |
 | `SECRET_KEY` | leer | Signaturschlüssel für Sitzungen (leer = automatisch erzeugt) |
 | `SESSION_MAX_AGE_DAYS` | `30` | Gültigkeit des Logins |
 | `MAX_CONCURRENT_DOWNLOADS` | `2` | parallele Aufträge |
@@ -136,9 +141,36 @@ WebSockets müssen nicht aktiviert werden; der Live-Fortschritt nutzt Server-Sen
 Heruntergeladene Dateien erscheinen **nicht** automatisch als abonnierter Podcast. Dafür ist ausschließlich der
 private Feed da, den du bewusst abonnierst.
 
+## Mehrere Benutzer
+
+Der erste Admin entsteht beim ersten Start aus `ADMIN_USERNAME`/`ADMIN_PASSWORD`. Weitere Konten legt ein Admin unter
+**Mehr → Benutzer verwalten** an.
+
+| | Benutzer | Admin |
+|---|---|---|
+| Eigene Downloads, Bibliothek, Podcast-Feed | ✓ | ✓ |
+| Passwort ändern, eigene Dateien aufräumen | ✓ | ✓ |
+| Aufträge und Bibliotheken aller Benutzer sehen und verwalten | – | ✓ |
+| Benutzer anlegen, Rollen, Kontingente, Sperren, Löschen | – | ✓ |
+| yt-dlp aktualisieren, temporäre Dateien leeren | – | ✓ |
+
+- **Getrennte Daten:** Jeder Benutzer sieht nur seine eigenen Aufträge und Medien. Fremde Medien sind auch per
+  direkter URL oder Feed-Token nicht abrufbar. Dateien liegen auf dem Host unter `downloads/<benutzer>/`.
+- **Speicherkontingent (MB):** Bei vollem Kontingent werden neue Aufträge abgelehnt. Der Download ist auf den freien
+  Platz begrenzt, und nach der Konvertierung wird die endgültige Größe noch einmal geprüft. Behaltene Originale zählen mit.
+- **Max. parallele Aufträge:** Zusätzlich zu `MAX_CONCURRENT_DOWNLOADS`. Die Warteschlange nimmt immer den ältesten
+  Auftrag, dessen Besitzer sein Limit noch nicht erreicht hat. So blockiert eine große Playlist nicht alle anderen.
+- **Sperren** beendet alle Sitzungen und bricht laufende Aufträge ab. **Löschen** entfernt das Konto mit allen Dateien
+  (Bestätigung durch Eingabe des Benutzernamens).
+- **Passwortwechsel** meldet alle anderen Geräte ab.
+
+**Umstieg von Version 1.0:** Beim ersten Start wird die Datenbank automatisch migriert. Vorhandene Medien, Aufträge
+und der bisherige Feed-Token gehen an den Admin, bestehende Podcast-Abos funktionieren weiter. Alte Dateien bleiben
+an ihrem Platz und wandern erst beim Bearbeiten der Metadaten in den Admin-Ordner.
+
 ## Privater Podcast-Feed
 
-Unter **Mehr → Privater Podcast-Feed** stehen die Feed-Adressen:
+Jeder Benutzer hat einen eigenen Feed mit eigenem Token. Unter **Mehr → Privater Podcast-Feed** stehen die Adressen:
 
 - **Alle Audiodateien** der Bibliothek
 - **Alle Videos**
@@ -203,7 +235,9 @@ docker compose stop && tar czf myytloader-backup.tgz data/database data/config &
 | Upload bricht ab | `client_max_body_size` im NPM erhöhen, `MAX_FILE_SIZE_MB` prüfen |
 | Apple Podcasts kann den Feed nicht laden | HTTPS verwenden und `BASE_URL` korrekt setzen |
 | Rechteprobleme in `./data` | `PUID`/`PGID` passend setzen, Container neu starten |
-| Passwort vergessen | `ADMIN_PASSWORD` in `.env` setzen, `docker compose up -d` |
+| Benutzer hat Passwort vergessen | Admin: Mehr → Benutzer verwalten → Bearbeiten → neues Passwort |
+| Admin-Passwort vergessen | In `.env` `ADMIN_PASSWORD=<neu>` und `ADMIN_PASSWORD_RESET=true`, `docker compose up -d`, danach `ADMIN_PASSWORD_RESET=false` |
+| „Speicherkontingent erschöpft“ | eigene Dateien löschen oder Kontingent durch Admin erhöhen |
 
 Logs:
 
@@ -220,14 +254,15 @@ backend/app/
   config.py             Konfiguration aus Umgebungsvariablen
   db.py                 SQLite (WAL) + Migrationen (PRAGMA user_version)
   security.py           URL-/SSRF-Prüfung, Dateinamen, Pfade, Rate Limiter
-  auth.py               Session-Cookie (signiert), Passwort, CSRF-Header
+  auth.py               Session-Cookie (signiert, mit Session-Version), Rollen, CSRF-Header
+  users.py              Benutzer, scrypt-Hashes, Kontingente, Feed-Tokens, Migration aus v1
   ytdlp.py              yt-dlp als Subprozess: Analyse, Download, Fortschritt, Fehlertexte, Updates
   media.py              FFmpeg: Konvertierung, Loudnorm, Stille, Cover; Tagging mit mutagen
-  jobs.py               Warteschlange mit Workern, Event-Bus für SSE
+  jobs.py               Warteschlange mit fairem Scheduler (Limit pro Benutzer), Event-Bus für SSE (pro Benutzer gefiltert)
   library.py            Bibliothek: Abfragen, Bearbeiten, Löschen
   feed.py               RSS-Feed mit iTunes-Namespace, Feed-Token
   maintenance.py        Temp-Bereinigung, Aufbewahrungsfrist, yt-dlp-Auto-Update
-  routes/               HTTP-Endpunkte (auth, jobs, library, feed, system)
+  routes/               HTTP-Endpunkte (auth, users, jobs, library, feed, system)
 docker/entrypoint.sh    Volumes an PUID/PGID anpassen, Rechte abgeben, uvicorn starten
 ```
 
@@ -235,7 +270,7 @@ Ablauf eines Auftrags: `queued → running (yt-dlp) → processing (FFmpeg, Tags
 Die App läuft bewusst mit **einem** uvicorn-Worker, weil Warteschlange und Live-Events im Prozess gehalten werden.
 
 **Erweiterbarkeit:** Die Bausteine sind so getrennt, dass sich weitere Funktionen ohne Umbau ergänzen lassen:
-mehrere Benutzer (`auth.py` kapselt die Anmeldung; Tabelle + Spalte `owner` in `media`/`jobs`), NAS-Sync bzw. Import
+NAS-Sync bzw. Import
 lokaler Dateien (Upload-Pfad im `JobManager` mit `kind=upload` wiederverwenden), Wiedergabelisten (neue Tabelle),
 automatisierte Verarbeitung neuer Dateien (Watch-Task analog `maintenance.py`) und Home Assistant (REST-API bzw. Webhook
 aus dem Event-Bus).
@@ -253,7 +288,8 @@ python -m pytest -q
 ```
 
 Die Tests nutzen echtes FFmpeg (Konvertierung, Loudness, Stille, Tags für alle Formate) und ein Fake-yt-dlp mit
-demselben CLI-Vertrag für die API-End-to-End-Tests (Auth, CSRF, SSRF, Playlist, Abbruch, Größenlimit, Feed, Upload).
+demselben CLI-Vertrag für die API-End-to-End-Tests (Auth, CSRF, SSRF, Playlist, Abbruch, Größenlimit, Feed, Upload,
+Mehrbenutzer: Trennung, Rollen, Kontingente, Job-Limits, Migration aus v1).
 
 Lokal starten:
 

@@ -1,38 +1,12 @@
-"""Privater Podcast-RSS-Feed (Token in der URL, da Podcast-Apps keine Cookies nutzen)."""
+"""Privater Podcast-RSS-Feed pro Benutzer (Token in der URL, da Podcast-Apps keine Cookies nutzen)."""
 from __future__ import annotations
 
-import hmac
-import secrets
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from urllib.parse import quote
 from xml.sax.saxutils import escape
 
-from .db import Database
 from .media import MIME_TYPES
-from .security import UserError
-
-FEED_TOKEN_KEY = "feed_token"
-
-
-class FeedTokens:
-    def __init__(self, db: Database):
-        self.db = db
-
-    def get(self) -> str:
-        token = self.db.kv_get(FEED_TOKEN_KEY)
-        if not token:
-            token = self.rotate()
-        return token
-
-    def rotate(self) -> str:
-        token = secrets.token_urlsafe(24)
-        self.db.kv_set(FEED_TOKEN_KEY, token)
-        return token
-
-    def verify(self, token: str) -> None:
-        if not hmac.compare_digest(token.encode(), self.get().encode()):
-            raise UserError("Unbekannter Feed.", status_code=404)
 
 
 def _rfc822(iso: str | None) -> str:

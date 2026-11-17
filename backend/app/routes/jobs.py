@@ -10,9 +10,8 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..auth import client_ip
 from ..config import ALL_FORMATS, AUDIO_FORMATS
-from ..deps import require_user, services
+from ..deps import CurrentUser, require_user, services
 from ..security import UserError, sanitize_filename, validate_url, youtube_video_url
 
 router = APIRouter(prefix="/api", tags=["jobs"], dependencies=[Depends(require_user)])
@@ -73,22 +72,23 @@ def _thumb(url: str | None) -> str | None:
 
 
 @router.post("/analyze")
-async def analyze(body: AnalyzeBody, request: Request) -> dict:
+async def analyze(body: AnalyzeBody, user: CurrentUser, request: Request) -> dict:
     svc = services(request)
-    svc.api_limiter.check(client_ip(request))
+    svc.api_limiter.check(user["id"])
     url = validate_url(body.url, svc.settings.allowed_domains, svc.settings.check_dns)
     return await asyncio.to_thread(svc.ytdlp.analyze, url, svc.settings.playlist_max_items)
 
 
 @router.get("/jobs")
-def list_jobs(request: Request, status: Literal["active", "done", "failed", "all"] = "all") -> list[dict]:
-    return services(request).jobs.list(None if status == "all" else status)
+def list_jobs(user: CurrentUser, request: Request,
+              status: Literal["active", "done", "failed", "all"] = "all") -> list[dict]:
+    return services(request).jobs.list(user, None if status == "all" else status)
 
 
 @router.post("/jobs")
-def create_jobs(body: JobBody, request: Request) -> dict:
+def create_jobs(body: JobBody, user: CurrentUser, request: Request) -> dict:
     svc = services(request)
-    svc.api_limiter.check(client_ip(request))
+    svc.api_limiter.check(user["id"])
     fmt = body.format.lower()
     if fmt not in ALL_FORMATS:
         raise UserError("Unbekanntes Ausgabeformat.")
@@ -101,42 +101,43 @@ def create_jobs(body: JobBody, request: Request) -> dict:
         validate_url(body.url, svc.settings.allowed_domains, svc.settings.check_dns)
         for e in body.entries:
             created.append(svc.jobs.create(
-                url=youtube_video_url(e.id), fmt=fmt, options=opts, title=e.title, channel=e.channel,
+                user=user, url=youtube_video_url(e.id), fmt=fmt, options=opts, title=e.title, channel=e.channel,
                 thumbnail=_thumb(e.thumbnail), duration=e.duration, collection=collection or "Playlist",
             ))
     else:
         url = validate_url(body.url, svc.settings.allowed_domains, svc.settings.check_dns)
         created.append(svc.jobs.create(
-            url=url, fmt=fmt, options=opts, title=body.title, channel=body.channel,
+            user=user, url=url, fmt=fmt, options=opts, title=body.title, channel=body.channel,
             thumbnail=_thumb(body.thumbnail), duration=body.duration, collection=collection,
         ))
     return {"jobs": created}
 
 
 @router.post("/jobs/{job_id}/cancel")
-def cancel_job(job_id: str, request: Request) -> dict:
-    return services(request).jobs.cancel(job_id)
+def cancel_job(job_id: str, user: CurrentUser, request: Request) -> dict:
+    return services(request).jobs.cancel(job_id, user)
 
 
 @router.post("/jobs/{job_id}/retry")
-def retry_job(job_id: str, request: Request) -> dict:
-    return services(request).jobs.retry(job_id)
+def retry_job(job_id: str, user: CurrentUser, request: Request) -> dict:
+    return services(request).jobs.retry(job_id, user)
 
 
 @router.delete("/jobs/{job_id}")
-def delete_job(job_id: str, request: Request) -> dict:
-    services(request).jobs.delete(job_id)
+def delete_job(job_id: str, user: CurrentUser, request: Request) -> dict:
+    services(request).jobs.delete(job_id, user)
     return {"ok": True}
 
 
 @router.delete("/jobs")
-def clear_jobs(request: Request) -> dict:
-    return {"deleted": services(request).jobs.clear_finished()}
+def clear_jobs(user: CurrentUser, request: Request) -> dict:
+    return {"deleted": services(request).jobs.clear_finished(user)}
 
 
 @router.post("/uploads")
 async def upload(
     request: Request,
+    user: CurrentUser,
     file: UploadFile = File(...),
     format: str = Form("m4a"),
     title: str | None = Form(None),
@@ -149,7 +150,10 @@ async def upload(
 ) -> dict:
     """Eigene Audio-/Videodateien hinzufügen (z. B. für den privaten Podcast-Feed)."""
     svc = services(request)
-    svc.api_limiter.check(client_ip(request))
+    svc.api_limiter.check(user["id"])
+    remaining = svc.users.remaining_bytes(user)
+    if remaining == 0:
+        raise UserError("Dein Speicherkontingent ist erschöpft.", status_code=413)
     fmt = format.lower()
     if fmt not in ALL_FORMATS:
         raise UserError("Unbekanntes Ausgabeformat.")
@@ -159,13 +163,14 @@ async def upload(
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / f"{uuid.uuid4().hex}{suffix}"
     size = 0
-    limit = svc.settings.max_file_size_bytes
+    limit = svc.settings.max_file_size_bytes if remaining is None else min(svc.settings.max_file_size_bytes, remaining)
     try:
         with target.open("wb") as fh:
             while chunk := await file.read(1024 * 1024):
                 size += len(chunk)
                 if size > limit:
-                    raise UserError(f"Die Datei ist größer als {svc.settings.max_file_size_mb} MB.", 413)
+                    raise UserError(f"Die Datei ist größer als {limit // 1048576} MB "
+                                    "(Dateigrößen-Limit bzw. freies Kontingent).", 413)
                 fh.write(chunk)
         probe = await asyncio.to_thread(svc.ffmpeg.probe, target)
         if fmt in AUDIO_FORMATS and not svc.ffmpeg.stream(probe, "audio"):
@@ -188,17 +193,17 @@ async def upload(
         "description": (description or "").strip()[:5000] or None,
     })
     col = sanitize_filename(collection, fallback="") or None if collection else None
-    job = svc.jobs.create(url=f"upload:{original}", kind="upload", fmt=fmt, options=opts,
+    job = svc.jobs.create(user=user, url=f"upload:{original}", kind="upload", fmt=fmt, options=opts,
                           title=opts["title"] or Path(original).stem, channel=opts["artist"],
                           duration=svc.ffmpeg.duration(probe), collection=col)
     return {"jobs": [job]}
 
 
 @router.get("/events")
-async def events(request: Request) -> StreamingResponse:
-    """Server-Sent Events für Live-Fortschritt."""
+async def events(user: CurrentUser, request: Request) -> StreamingResponse:
+    """Server-Sent Events für Live-Fortschritt (nur eigene Ereignisse, Admins alle)."""
     svc = services(request)
-    queue = svc.bus.subscribe()
+    queue = svc.bus.subscribe(user)
 
     async def stream():
         try:

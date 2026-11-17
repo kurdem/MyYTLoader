@@ -17,7 +17,6 @@ from .auth import Auth
 from .config import Settings, get_settings
 from .db import Database
 from .deps import Services
-from .feed import FeedTokens
 from .jobs import EventBus, JobManager
 from .library import Library
 from .maintenance import maintenance_loop
@@ -27,7 +26,9 @@ from .routes import feed as feed_routes
 from .routes import jobs as job_routes
 from .routes import library as library_routes
 from .routes import system as system_routes
+from .routes import users as user_routes
 from .security import RateLimiter, UserError
+from .users import Users
 from .ytdlp import YtDlp
 
 log = logging.getLogger("ytloader")
@@ -47,11 +48,13 @@ def build_services(settings: Settings) -> Services:
     bus = EventBus()
     ffmpeg = FFmpeg(settings.ffmpeg_bin, settings.ffprobe_bin)
     ytdlp = YtDlp(settings)
-    library = Library(settings, db, bus)
-    jobs = JobManager(settings, db, ytdlp, ffmpeg, library, bus)
+    users = Users(settings, db)
+    auth = Auth(settings, users)  # legt beim ersten Start den Admin an / übernimmt Bestandsdaten
+    library = Library(settings, db, users, bus)
+    jobs = JobManager(settings, db, ytdlp, ffmpeg, library, users, bus)
     return Services(
-        settings=settings, db=db, auth=Auth(settings), bus=bus, ytdlp=ytdlp, ffmpeg=ffmpeg,
-        library=library, jobs=jobs, feed=FeedTokens(db),
+        settings=settings, db=db, users=users, auth=auth, bus=bus, ytdlp=ytdlp, ffmpeg=ffmpeg,
+        library=library, jobs=jobs,
         api_limiter=RateLimiter(settings.rate_limit_per_minute, 60),
         login_limiter=RateLimiter(10, 300),
     )
@@ -118,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system_routes.public)
     app.include_router(system_routes.router)
     app.include_router(auth_routes.router)
+    app.include_router(user_routes.router)
     app.include_router(job_routes.router)
     app.include_router(library_routes.router)
     app.include_router(feed_routes.private)
